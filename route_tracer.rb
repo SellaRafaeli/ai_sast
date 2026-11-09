@@ -3,17 +3,20 @@
 # methods/files that may run when the route is hit.
 #
 #   ruby route_tracer.rb /path/to/repo [--out trace.json] [--depth 6] [--route posts]
+#                                      [--with-source] [--all-routes]
 #
 # Pipeline (each step logs what it does):
-#   1. INDEX   parse every .rb (Prism) and .py (python3 ast) file into
-#              defs = {id, name, owner(class), file, lines, calls[]}  -> Mongo `defs`
-#   2. ROUTES  find routes: Rails routes.rb, Sinatra, Flask/FastAPI, Django urls.py
-#                                                                     -> Mongo `routes`
+#   1. INDEX   parse every .rb (Prism), .py (python3 ast) and .js/.ts (node + typescript)
+#              file into defs = {id, name, owner(class), file, lines, calls[]} -> Mongo `defs`
+#   2. ROUTES  find routes: Rails routes.rb, Sinatra, Flask/FastAPI, Django urls.py,
+#              Express/Koa/Fastify (app.get(...)), NestJS (@Controller/@Get) -> Mongo `routes`
 #   3. TRACE   BFS from each handler: look up each call name in the index,
 #              resolve it with simple heuristics (+ optional LLM), recurse.
-#                                                                     -> Mongo `traces`
-#   4. OUTPUT  trace.json (full) + trace.txt (indented, human-readable)
+#   4. TRIM    keep only routes that take input (path params, a body, query args,
+#              or code on the path that reads request params)  -> Mongo `traces`
+#   5. OUTPUT  trace.json (full) + trace.txt (indented, human-readable)
 #
+# Node/TS: needs `node` and the `typescript` package (npm i -g typescript).
 # Mongo: set MONGO_URL (default mongodb://127.0.0.1:27017/route_tracer).
 #        If the `mongo` gem is missing, an in-memory store is used instead.
 # LLM:   set ANTHROPIC_API_KEY to let an LLM pick among ambiguous call targets.
@@ -21,20 +24,31 @@
 
 require "prism"
 require "json"
+Encoding.default_external = Encoding::UTF_8 # source files are UTF-8 even under a C/ASCII locale
 require "optparse"
 require "set"
 require "net/http"
 
 MAX_FANOUT = 3 # follow at most this many same-named candidates for one call
 MAX_SOURCE_LINES = 300 # --with-source: cap per method
-SKIP_DIRS  = %w[.git node_modules vendor venv .venv env tmp log spec test tests
-                __pycache__ site-packages dist build coverage].freeze
+SKIP_DIRS  = %w[.git node_modules vendor venv .venv env tmp log spec test tests __tests__
+                __pycache__ site-packages dist build coverage .next
+                frontend client public static assets].freeze # browser code isn't server routes
+# Constant receivers that are language/stdlib classes, not data access (JSON.parse, Math.max, Time.now...)
+STDLIB     = %w[JSON Math Object Promise Array Date Number String Boolean Error Buffer Reflect Symbol
+                Map Set URL Intl Rails File Dir Time Integer Float Hash Struct Kernel Base64 SecureRandom
+                ActiveSupport Logger Process IO Regexp Thread Mutex Digest OpenSSL CSV ERB URI Net
+                Faraday HTTParty BigDecimal Pathlib Path].to_set.freeze
 VERBS      = %w[get post put patch delete].freeze
 # Calls on unknown receivers with these names are almost never app code.
 NOISY      = %w[each map select reject find_each to_s to_h to_a to_i to_json inspect
                 call get set first last count size length join strip split
                 present? blank? nil? empty? include? key? merge append items keys
                 values format].to_set.freeze
+JS_EXT     = /\.(js|jsx|mjs|cjs|ts|tsx)\z/
+# Code that reads request input (Ruby, Python, Node). Used by the TRIM step.
+INPUT_CODE = /\bparams\b|\brequest\.(args|form|json|get_json|values|GET|POST|data|body|query_params|FILES)\b|
+              \b(req|request|ctx)\.(params|query|body)\b|ctx\.request\.body|@(Param|Body|Query)\(/x
 
 def log(step, msg) = puts("[#{step}] #{msg}")
 
@@ -316,8 +330,11 @@ PY_INDEXER = <<~'PY'
 
   def recv_of(v):
       if isinstance(v, ast.Name): return v.id
-      if isinstance(v, ast.Attribute) and v.attr[:1].isupper(): return v.attr  # models.User
-      return 'expr'
+      chain = []                       # User.objects -> ['User', 'objects'];  models.User -> ['models', 'User']
+      while isinstance(v, ast.Attribute):
+          chain.insert(0, v.attr); v = v.value
+      if isinstance(v, ast.Name): chain.insert(0, v.id)
+      return next((c for c in chain if c[:1].isupper()), 'expr')  # first class name in the chain
 
   def call_of(f):
       if isinstance(f, ast.Call): f = f.func
@@ -343,6 +360,17 @@ PY_INDEXER = <<~'PY'
               out.append({'name': nm, 'recv': rv})
       return [dict(t) for t in {tuple(sorted(c.items(), key=str)) for c in out}]
 
+  def params_of(fn):  # handler args = path/query/body input (minus Depends() and framework args)
+      a = fn.args
+      pos = a.posonlyargs + a.args
+      dep = set()
+      pairs = list(zip(pos[len(pos) - len(a.defaults):], a.defaults)) + list(zip(a.kwonlyargs, a.kw_defaults))
+      for arg, d in pairs:
+          if isinstance(d, ast.Call) and call_of(d.func)[0] in ('Depends', 'Security'):
+              dep.add(arg.arg)
+      skip = {'self', 'cls', 'request', 'req', 'db', 'session', 'response', 'background_tasks'}
+      return [x.arg for x in pos + a.kwonlyargs if x.arg not in dep and x.arg not in skip]
+
   res = {'defs': [], 'classes': {}, 'routes': [], 'filters': []}
   for path, rel in json.load(sys.stdin):
       try:
@@ -359,7 +387,8 @@ PY_INDEXER = <<~'PY'
               elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                   did = f'{rel}:{node.lineno}:{node.name}'
                   res['defs'].append({'id': did, 'name': node.name, 'owner': owner, 'file': rel,
-                                      'start': node.lineno, 'end': node.end_lineno, 'calls': calls_in(node)})
+                                      'start': node.lineno, 'end': node.end_lineno, 'calls': calls_in(node),
+                                      'params': params_of(node)})
                   for d in node.decorator_list:
                       f = d.func if isinstance(d, ast.Call) else d
                       if not isinstance(f, ast.Attribute): continue
@@ -373,7 +402,7 @@ PY_INDEXER = <<~'PY'
                               verbs = [e.value for e in m[0].elts] if m and isinstance(m[0], ast.List) else ['GET']
                           for v in verbs:
                               res['routes'].append({'verb': v, 'path': d.args[0].value,
-                                                    'framework': 'flask/fastapi', 'handler_id': did})
+                                                    'framework': 'flask/fastapi', 'handler_id': did, 'file': rel})
       visit(tree.body, None)
 
       if rel.endswith('urls.py'):  # Django: path('x/', views.fn) / path('x/', Cls.as_view())
@@ -381,7 +410,7 @@ PY_INDEXER = <<~'PY'
               if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in ('path', 're_path') \
                       and len(n.args) >= 2 and isinstance(n.args[0], ast.Constant):
                   view = n.args[1]
-                  r = {'verb': 'ANY', 'path': '/' + str(n.args[0].value), 'framework': 'django'}
+                  r = {'verb': 'ANY', 'path': '/' + str(n.args[0].value), 'framework': 'django', 'file': rel}
                   if isinstance(view, ast.Call) and isinstance(view.func, ast.Attribute) and view.func.attr == 'as_view':
                       r['handler_class'] = recv_of(view.func.value)
                   else:
@@ -403,6 +432,165 @@ rescue Errno::ENOENT
   { "defs" => [], "classes" => {}, "routes" => [], "filters" => [] }
 end
 
+# ─────────────────────────── 1+2c. INDEX + ROUTES: Node (TypeScript compiler) ───────────────────────────
+
+JS_INDEXER = <<~'JS'
+  const ts = require('typescript'), fs = require('fs');
+  const VERBS = new Set(['get', 'post', 'put', 'patch', 'delete', 'all']);
+  const NEST = { Get: 'GET', Post: 'POST', Put: 'PUT', Patch: 'PATCH', Delete: 'DELETE', All: 'ANY' };
+  // Receivers that are HTTP *clients* or maps, not servers: axios.get('/x'), cache.get(...)
+  const NOT_SERVER = /axios|http|fetch|client|api|request|\$|cache|map|params|headers|storage|query/i;
+  const res = { defs: [], classes: {}, routes: [], filters: [] };
+
+  let input = '';
+  process.stdin.on('data', d => input += d).on('end', () => {
+    for (const [path, rel] of JSON.parse(input)) indexFile(path, rel);
+    process.stdout.write(JSON.stringify(res));
+  });
+
+  function indexFile(path, rel) {
+    let src; try { src = fs.readFileSync(path, 'utf8'); } catch { return; }
+    const kind = /\.tsx$/.test(rel) ? ts.ScriptKind.TSX : /\.ts$/.test(rel) ? ts.ScriptKind.TS
+               : /\.jsx$/.test(rel) ? ts.ScriptKind.JSX : ts.ScriptKind.JS;
+    const sf = ts.createSourceFile(path, src, ts.ScriptTarget.Latest, true, kind);
+    const line = n => sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1;
+    const endLine = n => sf.getLineAndCharacterOfPosition(n.getEnd()).line + 1;
+    const isFn = n => n && (ts.isArrowFunction(n) || ts.isFunctionExpression(n));
+    const str = n => n && (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) ? n.text : null;
+    const decs = n => (ts.canHaveDecorators && ts.canHaveDecorators(n) ? ts.getDecorators(n) : n.decorators) || [];
+    const decName = d => (ts.isCallExpression(d.expression) ? d.expression.expression : d.expression).getText(sf);
+    const decArgs = d => ts.isCallExpression(d.expression) ? [...d.expression.arguments] : [];
+    const isConst = s => /^[A-Z]/.test(s || '');
+
+    function addDef(name, owner, node, body) {
+      const id = `${rel}:${line(node)}:${name}`;
+      res.defs.push({ id, name, owner, file: rel, start: line(node), end: endLine(node), calls: body ? callsIn(body) : [] });
+      return id;
+    }
+    function recvOf(e) {
+      if (e.kind === ts.SyntaxKind.ThisKeyword) return 'self';
+      const last = ts.isIdentifier(e) ? e.text : ts.isPropertyAccessExpression(e) ? e.name.text : null;
+      return isConst(last) ? last : 'expr'; // UserService.find -> constant; userService.find -> any object
+    }
+    function callOf(e) {
+      if (ts.isIdentifier(e)) return [e.text, null];
+      if (ts.isPropertyAccessExpression(e)) return [e.name.text, recvOf(e.expression)];
+      return [null, null];
+    }
+    function callsIn(body) {
+      const out = [], seen = new Set();
+      const push = (name, recv) => { const k = name + '|' + recv; if (!seen.has(k)) { seen.add(k); out.push({ name, recv }); } };
+      (function walk(n) {
+        if (ts.isCallExpression(n)) { const [nm, rv] = callOf(n.expression); if (nm) push(nm, rv); }
+        else if (ts.isNewExpression(n) && ts.isIdentifier(n.expression)) push('constructor', n.expression.text);
+        ts.forEachChild(n, walk);
+      })(body);
+      return out;
+    }
+    // A middleware/handler argument -> {def_id} (inline fn) or {name, recv} (a reference)
+    function ref(a, synth) {
+      if (isFn(a)) return { def_id: addDef(synth, null, a, a.body) };
+      if (ts.isIdentifier(a)) return { name: a.text };
+      if (ts.isPropertyAccessExpression(a)) {             // ctrl.show / UserController.show
+        const r = recvOf(a.expression);
+        return { name: a.name.text, recv: r === 'expr' || r === 'self' ? null : r };
+      }
+      if (ts.isCallExpression(a)) {                       // asyncHandler(fn) / auth('admin') / h.bind(x)
+        const inner = a.arguments.find(isFn);
+        if (inner) return { def_id: addDef(synth, null, inner, inner.body) };
+        if (ts.isPropertyAccessExpression(a.expression) && a.expression.name.text === 'bind') return ref(a.expression.expression, synth);
+        const [nm, rv] = callOf(a.expression);
+        if (nm) return { name: nm, recv: isConst(rv) ? rv : null };
+      }
+      return null;
+    }
+    // Express / Koa-router / Fastify:  app.get('/x', mw1, mw2, handler)   and   app.use(mw)
+    function routeCall(n) {
+      const e = n.expression;
+      if (!ts.isPropertyAccessExpression(e) || NOT_SERVER.test(e.expression.getText(sf))) return;
+      const verb = e.name.text, args = [...n.arguments];
+      if (verb === 'use' && args.length && !str(args[0])) {           // global middleware in this file
+        for (const a of args) { const r = ref(a, 'middleware'); if (r) res.filters.push({ scope_file: rel, ...r }); }
+        return;
+      }
+      const path = str(args[0]);
+      if (!VERBS.has(verb) || args.length < 2 || !path || !path.startsWith('/')) return;
+      const v = verb === 'all' ? 'ANY' : verb.toUpperCase();
+      const mws = args.slice(1, -1).flatMap(a => ts.isArrayLiteralExpression(a) ? [...a.elements] : [a]);
+      const h = ref(args[args.length - 1], `${v} ${path}`);
+      if (!h) return;
+      res.routes.push({ verb: v, path, framework: 'express', file: rel,
+                        middleware: mws.map(a => ref(a, 'middleware')).filter(Boolean),
+                        ...(h.def_id ? { handler_id: h.def_id } : { handler_name: h.name, handler_recv: h.recv }) });
+    }
+    // NestJS @UseGuards(AuthGuard, new RolesGuard()) -> calls to Guard#canActivate
+    const guards = d => decName(d) !== 'UseGuards' ? [] : decArgs(d).map(a =>
+      ts.isIdentifier(a) ? { name: 'canActivate', recv: a.text }
+      : ts.isNewExpression(a) && ts.isIdentifier(a.expression) ? { name: 'canActivate', recv: a.expression.text }
+      : ts.isCallExpression(a) ? { name: a.expression.getText(sf) } : null).filter(Boolean);
+    const joinPath = (...p) => '/' + p.filter(Boolean).map(s => s.replace(/^\/+|\/+$/g, '')).filter(Boolean).join('/');
+
+    function visitClass(n, owner) {
+      const name = n.name ? n.name.text : 'AnonymousClass';
+      const ext = (n.heritageClauses || []).find(h => h.token === ts.SyntaxKind.ExtendsKeyword);
+      res.classes[name] = { superclass: ext ? ext.types[0].expression.getText(sf) : null, includes: [], file: rel };
+      const ctrl = decs(n).find(d => decName(d) === 'Controller');
+      const prefix = ctrl ? (str(decArgs(ctrl)[0]) || '') : null;
+      const classGuards = decs(n).flatMap(guards);
+      for (const m of n.members) {
+        let id = null;
+        if ((ts.isMethodDeclaration(m) || ts.isConstructorDeclaration(m)) && m.body)
+          id = addDef(ts.isConstructorDeclaration(m) ? 'constructor' : m.name.getText(sf), name, m, m.body);
+        else if (ts.isPropertyDeclaration(m) && isFn(m.initializer))  // handle = async (req, res) => {...}
+          id = addDef(m.name.getText(sf), name, m, m.initializer.body);
+        if (!id || prefix === null) continue;
+        const http = decs(m).find(d => NEST[decName(d)]);
+        if (http) res.routes.push({ verb: NEST[decName(http)], path: joinPath(prefix, str(decArgs(http)[0])),
+                                    framework: 'nestjs', file: rel, handler_id: id,
+                                    middleware: [...classGuards, ...decs(m).flatMap(guards)] });
+      }
+      ts.forEachChild(n, c => visit(c, name)); // routes may be registered inside methods
+    }
+
+    function visit(n, owner) {
+      if (ts.isClassDeclaration(n) || ts.isClassExpression(n)) return visitClass(n, owner);
+      if (ts.isFunctionDeclaration(n) && n.name && n.body) addDef(n.name.text, owner, n, n.body);
+      else if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && isFn(n.initializer))
+        addDef(n.name.text, owner, n, n.initializer.body);                       // const show = async (req, res) => {}
+      else if (ts.isPropertyAssignment(n) && isFn(n.initializer))
+        addDef(n.name.getText(sf), owner, n, n.initializer.body);                // module.exports = { show: function () {} }
+      else if (ts.isMethodDeclaration(n) && ts.isObjectLiteralExpression(n.parent) && n.body)
+        addDef(n.name.getText(sf), owner, n, n.body);                            // { show(req, res) {} }
+      else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken
+               && ts.isPropertyAccessExpression(n.left) && isFn(n.right))
+        addDef(n.left.name.text, owner, n, n.right.body);                        // exports.show = (req, res) => {}
+      else if (ts.isCallExpression(n)) routeCall(n);
+      ts.forEachChild(n, c => visit(c, owner));
+    }
+    visit(sf, null);
+  }
+JS
+
+def index_js(files)
+  empty = { "defs" => [], "classes" => {}, "routes" => [], "filters" => [] }
+  return empty if files.empty?
+  # Find the `typescript` package in local or global node_modules.
+  global = `npm root -g 2>/dev/null`.strip rescue ""
+  env = { "NODE_PATH" => [ENV["NODE_PATH"], global].reject { |p| p.nil? || p.empty? }.join(File::PATH_SEPARATOR) }
+  out = IO.popen(env, ["node", "-e", JS_INDEXER], "r+", err: %i[child out]) do |io|
+    io.write(JSON.dump(files))
+    io.close_write
+    io.read
+  end
+  JSON.parse(out)
+rescue Errno::ENOENT
+  log(:index, "node not found -> skipping #{files.size} JS/TS files")
+  empty
+rescue JSON::ParserError
+  log(:index, "JS indexer failed -> skipping JS/TS files (is `typescript` installed? npm i -g typescript)\n#{out.to_s[0, 400]}")
+  empty
+end
+
 # ─────────────────────────── 3. TRACE ───────────────────────────
 
 class Tracer
@@ -421,22 +609,37 @@ class Tracer
     { "id" => d["id"], "label" => label(d), "file" => d["file"], "lines" => "#{d['start']}-#{d['end']}", "code" => body.join }
   end
 
-  # ── class hierarchy helpers ──
-  def find_class(name)
-    return nil unless name
-    return name if @classes.key?(name)
-    short = name.split("::").last
-    @classes.keys.find { |k| k.split("::").last == short }
+  # ── languages: a Ruby call never resolves to a Python/JS def, and vice versa ──
+  def lang_of(file)
+    case file.to_s
+    when /\.rb\z/ then "rb"
+    when /\.py\z/ then "py"
+    else "js"
+    end
   end
 
+  def defs_in(name, lang) = @store.defs_named(name).select { |d| lang_of(d["file"]) == lang }
+
+  # ── class hierarchy helpers (classes are keyed "lang:Name", e.g. "rb:Api::PostsController") ──
+  def find_class(name, lang)
+    return nil unless name
+    key = "#{lang}:#{name}"
+    return key if @classes.key?(key)
+    short = name.split("::").last
+    @classes.keys.find { |k| k.start_with?("#{lang}:") && k.delete_prefix("#{lang}:").split("::").last == short }
+  end
+
+  def class_of(d) = find_class(d["owner"], lang_of(d["file"]))
+  def plain(key) = key&.split(":", 2)&.last
+
   # [C, its superclass, included modules, ...] (closest first)
-  def ancestors(owner)
-    out, queue = [], [find_class(owner)].compact
+  def ancestors(owner, lang)
+    out, queue = [], [find_class(owner, lang)].compact
     while (c = queue.shift)
       next if out.include?(c)
       out << c
       info = @classes[c]
-      queue.concat(([info["superclass"]] + info["includes"]).filter_map { |n| find_class(n) })
+      queue.concat(([info["superclass"]] + info["includes"]).filter_map { |n| find_class(n, lang) })
     end
     out
   end
@@ -445,29 +648,43 @@ class Tracer
   def entry_for(route)
     case route["framework"]
     when "rails"
-      handler = @store.defs_named(route["action"]).find { |d| same_class?(d["owner"], route["controller"]) }
-      chain = ancestors(route["controller"]).reverse # base class first
+      handler = defs_in(route["action"], "rb").find { |d| same_class?(d["owner"], route["controller"]) }
+      chain = ancestors(route["controller"], "rb").reverse # base class first
       active = []
       chain.each do |c|
-        @filters.select { |f| f["owner"] == c && f["name"] }.each do |f|
+        @filters.select { |f| f["owner"] == plain(c) && f["name"] }.each do |f|
           next if f["only"] && !f["only"].include?(route["action"])
           next if f["except"]&.include?(route["action"])
           f["kind"] == "skip" ? active.delete(f["name"]) : active |= [f["name"]]
         end
       end
       filter_defs = active.filter_map do |fname|
-        cands = @store.defs_named(fname)
-        cands.find { |d| chain.include?(find_class(d["owner"])) } || cands.first ||
+        cands = defs_in(fname, "rb")
+        cands.find { |d| chain.include?(class_of(d)) } || cands.first ||
           { "id" => "external:#{fname}", "name" => fname, "external" => true }
       end
       [handler, filter_defs]
     else
-      handler = @store.def_by_id(route["handler_id"]) if route["handler_id"]
-      handler ||= @store.defs_named(route["handler_name"]).find { |d| d["owner"].nil? } if route["handler_name"]
-      file = handler && handler["file"]
-      filter_defs = @filters.select { |f| f["scope_file"] && f["scope_file"] == file }.map { |f| @store.def_by_id(f["def_id"]) }
-      [handler, filter_defs.compact]
+      handler = route["handler_id"] ? @store.def_by_id(route["handler_id"])
+                                    : resolve_ref({ "name" => route["handler_name"], "recv" => route["handler_recv"] }, route["file"])
+      file = route["file"] || handler&.dig("file")
+      # file-wide filters (Sinatra `before`, Flask before_request, app.use(mw)): skip unknown libs like cors()
+      file_wide = @filters.select { |f| f["scope_file"] && f["scope_file"] == file }.filter_map { |f| resolve_ref(f, file) }
+      # per-route middleware (Express args, NestJS guards): keep unknown ones as visible external nodes
+      per_route = (route["middleware"] || []).map do |m|
+        resolve_ref(m, file) || { "id" => "external:#{m['name']}", "name" => m["name"], "owner" => m["recv"], "external" => true }
+      end
+      [handler, file_wide + per_route]
     end
+  end
+
+  # {def_id} or {name, recv} -> a def (prefer same file, then a plain function, then anything)
+  def resolve_ref(ref, near_file)
+    return @store.def_by_id(ref["def_id"]) if ref["def_id"]
+    return nil unless ref["name"]
+    cands = defs_in(ref["name"], lang_of(near_file))
+    cands = cands.select { |d| same_class?(d["owner"], ref["recv"]) } if ref["recv"]
+    cands.find { |d| d["file"] == near_file } || cands.find { |d| d["owner"].nil? } || cands.first
   end
 
   def same_class?(a, b) = a && b && (a == b || a.end_with?("::#{b}") || b.end_with?("::#{a}"))
@@ -475,25 +692,28 @@ class Tracer
   # ── call resolution: call {name, recv} inside caller def → [target defs] ──
   def resolve(call, caller)
     name, recv = call["name"], call["recv"]
+    lang = lang_of(caller["file"])
 
-    if recv&.match?(/\A[A-Z]/) # Constant receiver: Post.find, User.objects ...
+    if recv&.match?(/\A[A-Z]/) # Constant receiver: Post.find, User.objects.get, new OrderRepo() ...
+      ctor = %w[new initialize constructor __init__].include?(name)
       name = "initialize" if name == "new"
-      chain = ancestors(recv)
-      targets = @store.defs_named(name).select { |d| chain.include?(find_class(d["owner"])) }
+      chain = ancestors(recv, lang)
+      targets = defs_in(name, lang).select { |d| chain.include?(class_of(d)) }
       return [targets, "call"] unless targets.empty?
-      # Not defined in the app (e.g. ORM finder) but the class is: keep as a leaf — useful for IDOR.
-      cls = find_class(recv)
-      return [[{ "id" => "model:#{recv}.#{name}", "name" => name, "owner" => cls,
-                 "file" => @classes[cls]["file"], "leaf" => true }], "model_call"] if cls
-      return [[], nil]
+      return [[], nil] if ctor || STDLIB.include?(recv.split("::").first)
+      # Not defined in the app (an ORM finder like Post.find / Invoice.findById): keep as a leaf,
+      # pointing at the model's file when the class is in the app — the key signal for IDOR.
+      cls = find_class(recv, lang)
+      return [[{ "id" => "model:#{recv}.#{name}", "name" => name, "owner" => plain(cls) || recv,
+                 "file" => cls && @classes[cls]["file"], "leaf" => true }], "model_call"]
     end
 
-    cands = @store.defs_named(name)
+    cands = defs_in(name, lang)
     return [[], nil] if cands.empty?
 
     if recv.nil? || recv == "self" # implicit self: same class, then ancestors, then same file
-      chain = ancestors(caller["owner"])
-      mine = chain.lazy.map { |c| cands.select { |d| find_class(d["owner"]) == c } }.find(&:any?)
+      chain = ancestors(caller["owner"], lang)
+      mine = chain.lazy.map { |c| cands.select { |d| class_of(d) == c } }.find(&:any?)
       return [mine, "call"] if mine
       same_file = cands.select { |d| d["file"] == caller["file"] }
       return [same_file, "call"] if same_file.any?
@@ -502,8 +722,8 @@ class Tracer
     return [[], nil] if recv && NOISY.include?(name)
     # `@post.update(...)`: a call on some other object is not a call on our own class.
     if recv == "expr"
-      own = ancestors(caller["owner"])
-      cands = cands.reject { |d| own.include?(find_class(d["owner"])) }
+      own = ancestors(caller["owner"], lang)
+      cands = cands.reject { |d| own.include?(class_of(d)) }
       return [[], nil] if cands.empty?
     end
     return [cands, "call"] if cands.size == 1
@@ -550,15 +770,46 @@ class Tracer
     handler, filter_defs = entry_for(route)
     @seen = Set.new
     @files = Set.new
+    @via = {}
+    @model_calls = Set.new
+    @externals = Set.new
     @unresolved = []
     roots = filter_defs.map { |f| node(f, "before_filter", 1, []) }
     roots << (handler ? node(handler, "handler", 1, []) : { "label" => "(handler not found)", "via" => "handler" })
     result = { "route" => "#{route['verb']} #{route['path']}", "framework" => route["framework"],
-               "handler" => handler && label(handler), "files" => @files.to_a.sort, "methods" => @seen.to_a,
+               "handler" => handler && label(handler), "input" => input_kinds(route, handler),
+               "files" => @files.to_a.sort, "methods" => @seen.to_a, "model_calls" => @model_calls.to_a,
+               "external" => @externals.to_a,
                "unresolved" => @unresolved.uniq, "tree" => roots }
-    # --with-source: the body of every method reached, in the order it was first visited
-    result["sources"] = @seen.map { |id| source_of(@store.def_by_id(id)) } if @with_source
+    if @with_source
+      # the body of every method reached, in the order it was first visited ...
+      result["sources"] = @seen.map { |id| source_of(@store.def_by_id(id)).merge("via" => @via[id]) }
+      # ... and the same code as one text, ready to hand to an LLM
+      result["source_text"] = source_text(result)
+    end
     result
+  end
+
+  # Why this route can carry attacker-controlled input (empty = no input -> trimmed).
+  def input_kinds(route, handler)
+    names = route["path"].scan(/:(\w+)|\{(\w+)\}|<(?:\w+:)?(\w+)>/).flatten.compact
+    kinds = []
+    kinds << "path" if names.any?
+    kinds << "body" if %w[POST PUT PATCH].include?(route["verb"])
+    kinds << "query" if ((handler&.dig("params") || []) - names).any? # Flask/FastAPI handler args not in the path
+    kinds << "request_read" if @seen.any? { |id| (d = @store.def_by_id(id)) && source_of(d)["code"].match?(INPUT_CODE) }
+    kinds
+  end
+
+  def source_text(t)
+    head = ["Route: #{t['route']}  (#{t['framework']})", "Handler: #{t['handler'] || '(not found)'}",
+            "Input: #{t['input'].join(', ')}"]
+    head << "External filters/middleware (library code, not shown): #{t['external'].join(', ')}" if t["external"].any?
+    head << "Data-access calls (defined outside the app code): #{t['model_calls'].join(', ')}" if t["model_calls"].any?
+    blocks = t["sources"].map do |s|
+      "### [#{s['via']}] #{s['label']} — #{s['file']}:#{s['lines']}\n```\n#{s['code'].chomp}\n```"
+    end
+    (head + [""] + blocks).join("\n") + "\n"
   end
 
   def label(d) = [d["owner"], d["name"]].compact.join(d["owner"]&.match?(/\A[A-Z]/) && !d["leaf"] ? "#" : ".")
@@ -568,11 +819,18 @@ class Tracer
     n["file"] = "#{d['file']}:#{d['start']}-#{d['end']}" if d["file"] && d["start"]
     n["file"] ||= d["file"] if d["file"]
     @files << d["file"] if d["file"]
-    return n.merge("external" => true) if d["external"]
-    return n.merge("leaf" => true) if d["leaf"]
+    if d["external"]
+      @externals << "#{n['label']} [#{via}]"
+      return n.merge("external" => true)
+    end
+    if d["leaf"]
+      @model_calls << n["label"]
+      return n.merge("leaf" => true)
+    end
     return n.merge("cycle" => true) if path.include?(d["id"])
     return n.merge("seen" => true) if @seen.include?(d["id"]) # already expanded in this route
     @seen << d["id"]
+    @via[d["id"]] = via
     return n.merge("truncated" => true) if depth >= @depth
 
     kids = []
@@ -604,29 +862,35 @@ if $PROGRAM_NAME == __FILE__
     o.on("--out FILE", "output JSON (a .txt tree is written next to it)") { |v| opts[:out] = v }
     o.on("--depth N", Integer, "max call depth (default 6)") { |v| opts[:depth] = v }
     o.on("--route TEXT", "only trace routes whose 'VERB /path' contains TEXT") { |v| opts[:route] = v }
-    o.on("--with-source", "include the code of every reached method in each trace") { opts[:source] = true }
+    o.on("--with-source", "include the code of every reached method (sources + source_text)") { opts[:source] = true }
+    o.on("--all-routes", "keep routes that take no input too") { opts[:all] = true }
   end.parse!
   repo = File.expand_path(ARGV.fetch(0) { abort "usage: ruby route_tracer.rb REPO [--out trace.json]" })
 
   # 1. INDEX
-  files = Dir.glob("**/*.{rb,py}", base: repo).reject { |f| f.split("/").any? { |p| SKIP_DIRS.include?(p) } }
-  rb_files, py_files = files.partition { |f| f.end_with?(".rb") }
-  log(:index, "#{rb_files.size} Ruby + #{py_files.size} Python files in #{repo}")
+  files = Dir.glob("**/*.{rb,py,js,jsx,mjs,cjs,ts,tsx}", base: repo)
+             .reject { |f| f.split("/").any? { |p| SKIP_DIRS.include?(p) } || f.end_with?(".d.ts", ".min.js") }
+  rb_files = files.select { |f| f.end_with?(".rb") }
+  py_files = files.select { |f| f.end_with?(".py") }
+  js_files = files.grep(JS_EXT)
+  log(:index, "#{rb_files.size} Ruby + #{py_files.size} Python + #{js_files.size} JS/TS files in #{repo}")
 
   rb = RubyIndexer.new
   rb_files.each { |f| rb.index(f, File.read(File.join(repo, f))) }
   py = index_python(py_files.map { |f| [File.join(repo, f), f] })
+  js = index_js(js_files.map { |f| [File.join(repo, f), f] })
 
-  defs = rb.defs + py["defs"]
-  classes = rb.classes.merge(py["classes"])
-  filters = rb.filters + py["filters"]
+  defs = rb.defs + py["defs"] + js["defs"]
+  classes = { "rb" => rb.classes, "py" => py["classes"], "js" => js["classes"] }
+              .flat_map { |lang, cs| cs.map { |name, info| ["#{lang}:#{name}", info] } }.to_h
+  filters = rb.filters + py["filters"] + js["filters"]
   log(:index, "#{defs.size} methods/functions, #{classes.size} classes/modules, #{filters.size} filters")
 
   store = Store.open(repo)
   store.insert(:defs, defs)
 
   # 2. ROUTES
-  routes = rb.routes + py["routes"]
+  routes = rb.routes + py["routes"] + js["routes"]
   rb_files.select { |f| f.match?(%r{\Aconfig/routes(\.rb|/)}) }.each do |f|
     routes.concat(RailsRoutes.parse(File.read(File.join(repo, f))))
   end
@@ -646,12 +910,20 @@ if $PROGRAM_NAME == __FILE__
   tracer = Tracer.new(store, classes, filters, repo, opts[:depth], with_source: opts[:source])
   traces = routes.map do |r|
     t = tracer.trace(r)
-    log(:trace, "#{t['route'].ljust(40)} -> #{t['handler'] || '?'}: #{t['methods'].size} methods, #{t['files'].size} files")
+    log(:trace, "#{t['route'].ljust(40)} -> #{t['handler'] || '?'}: #{t['methods'].size} methods, " \
+                "#{t['files'].size} files, input: #{t['input'].empty? ? 'none' : t['input'].join('+')}")
     t
+  end
+
+  # 4. TRIM: only routes that take input can have BOLA/IDOR
+  unless opts[:all]
+    dropped = traces.select { |t| t["input"].empty? }
+    traces -= dropped
+    log(:trim, "kept #{traces.size} routes with input, dropped #{dropped.size}: #{dropped.map { |t| t['route'] }.join(', ')}")
   end
   store.insert(:traces, traces.map(&:dup))
 
-  # 4. OUTPUT
+  # 5. OUTPUT
   File.write(opts[:out], JSON.pretty_generate(traces))
   txt = opts[:out].sub(/\.json\z/, "") + ".txt"
   File.write(txt, traces.map { |t| (["#{t['route']}  ->  #{t['handler']}"] + tree_text(t["tree"])).join("\n") }.join("\n\n") + "\n")
