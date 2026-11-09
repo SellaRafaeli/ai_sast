@@ -1,0 +1,3496 @@
+POST /admin/update_talent  ->  POST /admin/update_talent
+  before_filter  [before_filter]  admin/admin.rb:204-206
+    protected!  [call]  mw/middleware_incoming.rb:12-16
+      admin_authorized?  [call]  mw/middleware_incoming.rb:18-22
+  before_filter  [before_filter]  admin/admin.rb:208-210
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  before_filter  [before_filter]  admin/admin.rb:212-214
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  POST /admin/update_talent  [handler]  admin/admin.rb:16-25
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+
+POST /admin/upload_gdoc_sellers  ->  POST /admin/upload_gdoc_sellers
+  before_filter  [before_filter]  admin/admin.rb:204-206
+    protected!  [call]  mw/middleware_incoming.rb:12-16
+      admin_authorized?  [call]  mw/middleware_incoming.rb:18-22
+  before_filter  [before_filter]  admin/admin.rb:208-210
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  before_filter  [before_filter]  admin/admin.rb:212-214
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  POST /admin/upload_gdoc_sellers  [handler]  admin/admin.rb:27-32
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    upsert_users_from_csv  [call]  comm/csv.rb:7-51
+      load_csv  [call]  comm/csv.rb:3-5
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17
+      nice_id  [call]  my_lib.rb:75-80
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80  (seen)
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35
+
+GET /admin/users.csv  ->  GET /admin/users.csv
+  before_filter  [before_filter]  admin/admin.rb:204-206
+    protected!  [call]  mw/middleware_incoming.rb:12-16
+      admin_authorized?  [call]  mw/middleware_incoming.rb:18-22
+  before_filter  [before_filter]  admin/admin.rb:208-210
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  before_filter  [before_filter]  admin/admin.rb:212-214
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  GET /admin/users.csv  [handler]  admin/admin.rb:42-49
+    adm_users_crit  [call]  admin/admin_data.rb:159-172
+      adm_regex  [call]  admin/admin_data.rb:63-65
+      adm_since  [call]  admin/admin_data.rb:24-26
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+
+GET /admin/users/:id  ->  GET /admin/users/:id
+  before_filter  [before_filter]  admin/admin.rb:204-206
+    protected!  [call]  mw/middleware_incoming.rb:12-16
+      admin_authorized?  [call]  mw/middleware_incoming.rb:18-22
+  before_filter  [before_filter]  admin/admin.rb:208-210
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  before_filter  [before_filter]  admin/admin.rb:212-214
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  GET /admin/users/:id  [handler]  admin/admin.rb:51-55
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    halt_no_item  [call]  mw/halts.rb:1-3
+    admin_page  [call]  admin/admin_data.rb:14-18
+      default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /admin/user_page  ->  GET /admin/user_page
+  before_filter  [before_filter]  admin/admin.rb:204-206
+    protected!  [call]  mw/middleware_incoming.rb:12-16
+      admin_authorized?  [call]  mw/middleware_incoming.rb:18-22
+  before_filter  [before_filter]  admin/admin.rb:208-210
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  before_filter  [before_filter]  admin/admin.rb:212-214
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  GET /admin/user_page  [handler]  admin/admin.rb:57-59
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+
+GET /admin/errors/:id  ->  GET /admin/errors/:id
+  before_filter  [before_filter]  admin/admin.rb:204-206
+    protected!  [call]  mw/middleware_incoming.rb:12-16
+      admin_authorized?  [call]  mw/middleware_incoming.rb:18-22
+  before_filter  [before_filter]  admin/admin.rb:208-210
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  before_filter  [before_filter]  admin/admin.rb:212-214
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  GET /admin/errors/:id  [handler]  admin/admin.rb:65-69
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    halt_no_item  [call]  mw/halts.rb:1-3
+    admin_page  [call]  admin/admin_data.rb:14-18
+      default_layout  [call]  mw/view_helpers.rb:1-3
+
+POST /admin/errors/clear  ->  POST /admin/errors/clear
+  before_filter  [before_filter]  admin/admin.rb:204-206
+    protected!  [call]  mw/middleware_incoming.rb:12-16
+      admin_authorized?  [call]  mw/middleware_incoming.rb:18-22
+  before_filter  [before_filter]  admin/admin.rb:208-210
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  before_filter  [before_filter]  admin/admin.rb:212-214
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  POST /admin/errors/clear  [handler]  admin/admin.rb:72-84
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    require_fields  [call]  mw/halts.rb:29-31
+      halt_missing_param  [call]  mw/halts.rb:17-19
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35
+
+POST /admin/admin_config  ->  POST /admin/admin_config
+  before_filter  [before_filter]  admin/admin.rb:204-206
+    protected!  [call]  mw/middleware_incoming.rb:12-16
+      admin_authorized?  [call]  mw/middleware_incoming.rb:18-22
+  before_filter  [before_filter]  admin/admin.rb:208-210
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  before_filter  [before_filter]  admin/admin.rb:212-214
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  POST /admin/admin_config  [handler]  admin/admin.rb:118-133
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+    cu  [ambiguous]  scheduler.rb:36-36  (seen)
+    Hash#just  [ambiguous]  my_lib.rb:2-8
+    Array#just  [ambiguous]  my_lib.rb:25-27
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+    flash  [call]  mw/flash.rb:24-26  (seen)
+
+GET /admin/login_as  ->  GET /admin/login_as
+  before_filter  [before_filter]  admin/admin.rb:204-206
+    protected!  [call]  mw/middleware_incoming.rb:12-16
+      admin_authorized?  [call]  mw/middleware_incoming.rb:18-22
+  before_filter  [before_filter]  admin/admin.rb:208-210
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  before_filter  [before_filter]  admin/admin.rb:212-214
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  GET /admin/login_as  [handler]  admin/admin.rb:135-143
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    session  [call]  scheduler.rb:35-35  (seen)
+    flash  [call]  mw/flash.rb:24-26  (seen)
+
+GET /protected/enroll_to  ->  GET /protected/enroll_to
+  before_filter  [before_filter]  admin/admin.rb:204-206
+    protected!  [call]  mw/middleware_incoming.rb:12-16
+      admin_authorized?  [call]  mw/middleware_incoming.rb:18-22
+  before_filter  [before_filter]  admin/admin.rb:208-210
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  before_filter  [before_filter]  admin/admin.rb:212-214
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  GET /protected/enroll_to  [handler]  admin/admin.rb:145-151
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    enroll_user  [call]  bl/enrollment.rb:12-41
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      is_pro_cast  [call]  bl/casts.rb:361-363
+      send_email  [call]  comm/emails.rb:21-52
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+        Hash#compact  [call]  my_lib.rb:19-21
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+        Helpers#log_e  [call]  mw/error_handling.rb:6-16
+          cuid  [call]  mw/middleware_incoming.rb:123-126
+            cu  [call]  mw/middleware_incoming.rb:109-120  (truncated)
+          cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+          cu  [ambiguous]  scheduler.rb:36-36
+          request_path  [call]  mw/middleware_incoming.rb:128-130
+            _req  [call]  mw/middleware_incoming.rb:136-138  (truncated)
+          _params  [call]  mw/middleware_incoming.rb:140-142
+          Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      send_enrollment_emails  [call]  bl/enrollment.rb:86-98
+        email_by_view  [call]  comm/emails.rb:110-112
+        send_email  [call]  comm/emails.rb:21-52  (seen)
+      add_user_as_customer  [call]  bl/enrollment.rb:43-48
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16  (seen)
+    cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35
+
+GET /admin/give_pro  ->  GET /admin/give_pro
+  before_filter  [before_filter]  admin/admin.rb:204-206
+    protected!  [call]  mw/middleware_incoming.rb:12-16
+      admin_authorized?  [call]  mw/middleware_incoming.rb:18-22
+  before_filter  [before_filter]  admin/admin.rb:208-210
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  before_filter  [before_filter]  admin/admin.rb:212-214
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  GET /admin/give_pro  [handler]  admin/admin.rb:153-157
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35
+
+POST /admin/send_msg_now  ->  POST /admin/send_msg_now
+  before_filter  [before_filter]  admin/admin.rb:204-206
+    protected!  [call]  mw/middleware_incoming.rb:12-16
+      admin_authorized?  [call]  mw/middleware_incoming.rb:18-22
+  before_filter  [before_filter]  admin/admin.rb:208-210
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  before_filter  [before_filter]  admin/admin.rb:212-214
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  POST /admin/send_msg_now  [handler]  admin/admin.rb:159-164
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+
+GET /is_admin  ->  GET /is_admin
+  before_filter  [before_filter]  admin/admin.rb:204-206
+    protected!  [call]  mw/middleware_incoming.rb:12-16
+      admin_authorized?  [call]  mw/middleware_incoming.rb:18-22
+  before_filter  [before_filter]  admin/admin.rb:208-210
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  before_filter  [before_filter]  admin/admin.rb:212-214
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  GET /is_admin  [handler]  admin/admin.rb:170-173
+    is_admin  [call]  admin/admin.rb:184-191
+
+GET /admin/earnings/?:earn_id?  ->  GET /admin/earnings/?:earn_id?
+  before_filter  [before_filter]  admin/admin.rb:204-206
+    protected!  [call]  mw/middleware_incoming.rb:12-16
+      admin_authorized?  [call]  mw/middleware_incoming.rb:18-22
+  before_filter  [before_filter]  admin/admin.rb:208-210
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  before_filter  [before_filter]  admin/admin.rb:212-214
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  GET /admin/earnings/?:earn_id?  [handler]  admin/admin.rb:175-177
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /admin/manage/:coll  ->  GET /admin/manage/:coll
+  before_filter  [before_filter]  admin/admin.rb:204-206
+    protected!  [call]  mw/middleware_incoming.rb:12-16
+      admin_authorized?  [call]  mw/middleware_incoming.rb:18-22
+  before_filter  [before_filter]  admin/admin.rb:208-210
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  before_filter  [before_filter]  admin/admin.rb:212-214
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  GET /admin/manage/:coll  [handler]  admin/admin.rb:200-202
+    admin_page  [call]  admin/admin_data.rb:14-18
+      default_layout  [call]  mw/view_helpers.rb:1-3
+
+POST /admin/create_item  ->  POST /admin/create_item
+  before_filter  [before_filter]  admin/admin.rb:204-206
+    protected!  [call]  mw/middleware_incoming.rb:12-16
+      admin_authorized?  [call]  mw/middleware_incoming.rb:18-22
+  before_filter  [before_filter]  admin/admin.rb:208-210
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  before_filter  [before_filter]  admin/admin.rb:212-214
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  POST /admin/create_item  [handler]  admin/admin.rb:227-234
+    require_fields  [call]  mw/halts.rb:29-31
+      halt_missing_param  [call]  mw/halts.rb:17-19
+    Mongo::Client#collection  [call]  db/mongo.rb:16-16
+    mongo_coll_keys  [call]  db/mongo.rb:71-87
+      Hash#compact  [call]  my_lib.rb:19-21
+      Mongo::Collection#random  [call]  db/mongo_extension.rb:36-40
+    Hash#just  [ambiguous]  my_lib.rb:2-8
+    Array#just  [ambiguous]  my_lib.rb:25-27
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+
+POST /admin/update_item  ->  POST /admin/update_item
+  before_filter  [before_filter]  admin/admin.rb:204-206
+    protected!  [call]  mw/middleware_incoming.rb:12-16
+      admin_authorized?  [call]  mw/middleware_incoming.rb:18-22
+  before_filter  [before_filter]  admin/admin.rb:208-210
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  before_filter  [before_filter]  admin/admin.rb:212-214
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  POST /admin/update_item  [handler]  admin/admin.rb:236-242
+    require_fields  [call]  mw/halts.rb:29-31
+      halt_missing_param  [call]  mw/halts.rb:17-19
+    verify_admin_val  [call]  admin/admin.rb:216-225
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+    Mongo::Client#collection  [call]  db/mongo.rb:16-16
+
+POST /admin/delete_item  ->  POST /admin/delete_item
+  before_filter  [before_filter]  admin/admin.rb:204-206
+    protected!  [call]  mw/middleware_incoming.rb:12-16
+      admin_authorized?  [call]  mw/middleware_incoming.rb:18-22
+  before_filter  [before_filter]  admin/admin.rb:208-210
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  before_filter  [before_filter]  admin/admin.rb:212-214
+    protected!  [call]  mw/middleware_incoming.rb:12-16  (seen)
+  POST /admin/delete_item  [handler]  admin/admin.rb:244-249
+    require_fields  [call]  mw/halts.rb:29-31
+      halt_missing_param  [call]  mw/halts.rb:17-19
+    Mongo::Client#collection  [call]  db/mongo.rb:16-16
+
+POST /ping  ->  POST /ping
+  POST /ping  [handler]  app.rb:49-51
+
+POST /contact  ->  POST /contact
+  POST /contact  [handler]  app.rb:53-55
+
+GET /img/tags/:file  ->  GET /img/tags/:file
+  GET /img/tags/:file  [handler]  app.rb:61-63
+
+GET /cu  ->  GET /cu
+  GET /cu  [handler]  app.rb:137-139
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+      cu_session  [call]  mw/middleware_incoming.rb:104-107
+        session  [call]  scheduler.rb:35-35
+      cu_token  [call]  mw/middleware_incoming.rb:95-102
+        request_header  [call]  mw/middleware_incoming.rb:86-88
+    cu  [ambiguous]  scheduler.rb:36-36
+
+GET /contact  ->  GET /contact
+  GET /contact  [handler]  app.rb:145-154
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+
+GET /r/:code  ->  GET /r/:code
+  GET /r/:code  [handler]  app.rb:182-186
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /posts  ->  GET /posts
+  GET /posts  [handler]  app.rb:201-204
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /anon  ->  GET /anon
+  GET /anon  [handler]  app.rb:247-249
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+
+GET /  ->  GET /
+  GET /  [handler]  app.rb:255-302
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+      cu_session  [call]  mw/middleware_incoming.rb:104-107
+        session  [call]  scheduler.rb:35-35
+      cu_token  [call]  mw/middleware_incoming.rb:95-102
+        request_header  [call]  mw/middleware_incoming.rb:86-88
+    cu  [ambiguous]  scheduler.rb:36-36
+    ai_page  [call]  bl/ai.rb:279-283
+      ai_mark_seen  [call]  bl/ai.rb:248-250
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+          Hash#hwia  [call]  my_lib.rb:15-17
+      ai_open_agent_chat  [call]  bl/ai.rb:240-246
+        ai_find_agent_chat  [call]  bl/ai.rb:225-237
+          Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+          nice_id  [call]  my_lib.rb:75-80
+          Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+      cuid  [call]  mw/middleware_incoming.rb:123-126
+        cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+      ai_chat_msgs  [call]  bl/ai.rb:207-209
+      ai_public_msg  [call]  bl/ai.rb:211-217
+      ai_sidebar  [call]  bl/ai.rb:257-267
+        ai_team  [call]  bl/ai.rb:188-190
+          AI_AGENTS.reject  [model_call]    (leaf)
+        ai_find_agent_chat  [call]  bl/ai.rb:225-237  (seen)
+        ai_public_msg  [call]  bl/ai.rb:211-217  (seen)
+        ai_unread_count  [call]  bl/ai.rb:252-254
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /vip  ->  GET /vip
+  GET /vip  [handler]  app.rb:348-354
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+      cu_session  [call]  mw/middleware_incoming.rb:104-107
+        session  [call]  scheduler.rb:35-35
+      cu_token  [call]  mw/middleware_incoming.rb:95-102
+        request_header  [call]  mw/middleware_incoming.rb:86-88
+    cu  [ambiguous]  scheduler.rb:36-36
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /zip  ->  GET /zip
+  GET /zip  [handler]  app.rb:356-358
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+
+GET /zip/:code  ->  GET /zip/:code
+  GET /zip/:code  [handler]  app.rb:360-380
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    ZipCodes.identify  [model_call]    (leaf)
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /posts/:code/?:title?  ->  GET /posts/:code/?:title?
+  GET /posts/:code/?:title?  [handler]  app.rb:382-389
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /dispensaries/:state/?:city?  ->  GET /dispensaries/:state/?:city?
+  GET /dispensaries/:state/?:city?  [handler]  app.rb:417-420
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /delivery/:state/?:city?  ->  GET /delivery/:state/?:city?
+  GET /delivery/:state/?:city?  [handler]  app.rb:422-426
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+
+GET /send_daily_update  ->  GET /send_daily_update
+  GET /send_daily_update  [handler]  app.rb:517-520
+    send_daily_update  [call]  app.rb:522-540
+      Helpers#zerb  [call]  mw/helpers.rb:3-8
+      Array#mapo  [call]  my_lib.rb:33-35
+      Mongo::Collection#all  [call]  db/mongo_extension.rb:20-22
+        Mongo::Collection#get_many  [call]  db/mongo_extension.rb:8-13
+      send_email  [call]  comm/emails.rb:21-52
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+          nice_id  [call]  my_lib.rb:75-80
+          Hash#hwia  [call]  my_lib.rb:15-17
+        Hash#compact  [call]  my_lib.rb:19-21
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+          Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+        Helpers#log_e  [call]  mw/error_handling.rb:6-16
+          cuid  [call]  mw/middleware_incoming.rb:123-126
+            cu  [call]  mw/middleware_incoming.rb:109-120  (truncated)
+          cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+          cu  [ambiguous]  scheduler.rb:36-36
+          request_path  [call]  mw/middleware_incoming.rb:128-130
+            _req  [call]  mw/middleware_incoming.rb:136-138  (truncated)
+          _params  [call]  mw/middleware_incoming.rb:140-142
+          Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      nice_datetime_no_year  [call]  my_lib.rb:130-132
+      nice_date_year  [call]  my_lib.rb:122-124
+
+GET /day0  ->  GET /day0
+  GET /day0  [handler]  app.rb:561-564
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /ai  ->  GET /ai
+  GET /ai  [handler]  bl/ai.rb:290-293
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    ai_page  [call]  bl/ai.rb:279-283
+      ai_mark_seen  [call]  bl/ai.rb:248-250
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+          Hash#hwia  [call]  my_lib.rb:15-17
+      ai_open_agent_chat  [call]  bl/ai.rb:240-246
+        ai_find_agent_chat  [call]  bl/ai.rb:225-237
+          Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+          nice_id  [call]  my_lib.rb:75-80
+          Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+      cuid  [call]  mw/middleware_incoming.rb:123-126
+        cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+      ai_chat_msgs  [call]  bl/ai.rb:207-209
+      ai_public_msg  [call]  bl/ai.rb:211-217
+      ai_sidebar  [call]  bl/ai.rb:257-267
+        ai_team  [call]  bl/ai.rb:188-190
+          AI_AGENTS.reject  [model_call]    (leaf)
+        ai_find_agent_chat  [call]  bl/ai.rb:225-237  (seen)
+        ai_public_msg  [call]  bl/ai.rb:211-217  (seen)
+        ai_unread_count  [call]  bl/ai.rb:252-254
+
+GET /ai/c/:chat_id  ->  GET /ai/c/:chat_id
+  GET /ai/c/:chat_id  [handler]  bl/ai.rb:296-300
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    ai_chat_agent  [call]  bl/ai.rb:197-199
+      ai_agent  [call]  bl/ai.rb:192-195
+        AI_AGENTS.keys  [model_call]    (leaf)
+
+GET /ai/:agent  ->  GET /ai/:agent
+  GET /ai/:agent  [handler]  bl/ai.rb:303-309
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    ai_page  [call]  bl/ai.rb:279-283
+      ai_mark_seen  [call]  bl/ai.rb:248-250
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+          Hash#hwia  [call]  my_lib.rb:15-17
+      ai_open_agent_chat  [call]  bl/ai.rb:240-246
+        ai_find_agent_chat  [call]  bl/ai.rb:225-237
+          Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+          nice_id  [call]  my_lib.rb:75-80
+          Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+      cuid  [call]  mw/middleware_incoming.rb:123-126
+        cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+      ai_chat_msgs  [call]  bl/ai.rb:207-209
+      ai_public_msg  [call]  bl/ai.rb:211-217
+      ai_sidebar  [call]  bl/ai.rb:257-267
+        ai_team  [call]  bl/ai.rb:188-190
+          AI_AGENTS.reject  [model_call]    (leaf)
+        ai_find_agent_chat  [call]  bl/ai.rb:225-237  (seen)
+        ai_public_msg  [call]  bl/ai.rb:211-217  (seen)
+        ai_unread_count  [call]  bl/ai.rb:252-254
+
+GET /ai/:agent/msgs  ->  GET /ai/:agent/msgs
+  GET /ai/:agent/msgs  [handler]  bl/ai.rb:312-316
+    require_user_ajax  [call]  mw/halts.rb:33-35
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+    ai_mark_seen  [call]  bl/ai.rb:248-250
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17
+    ai_open_agent_chat  [call]  bl/ai.rb:240-246
+      ai_find_agent_chat  [call]  bl/ai.rb:225-237
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    ai_require_agent  [call]  bl/ai.rb:285-288
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+      pr  [ambiguous]  scheduler.rb:34-34
+    ai_chat_msgs  [call]  bl/ai.rb:207-209
+    ai_public_msg  [call]  bl/ai.rb:211-217
+
+POST /ai/:agent/seen  ->  POST /ai/:agent/seen
+  POST /ai/:agent/seen  [handler]  bl/ai.rb:318-322
+    require_user_ajax  [call]  mw/halts.rb:33-35
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+    ai_mark_seen  [call]  bl/ai.rb:248-250
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17
+    ai_find_agent_chat  [call]  bl/ai.rb:225-237
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    ai_require_agent  [call]  bl/ai.rb:285-288
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+      pr  [ambiguous]  scheduler.rb:34-34
+
+POST /ai/:agent/clear  ->  POST /ai/:agent/clear
+  POST /ai/:agent/clear  [handler]  bl/ai.rb:325-334
+    require_user_ajax  [call]  mw/halts.rb:33-35
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+    ai_require_agent  [call]  bl/ai.rb:285-288
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+      pr  [ambiguous]  scheduler.rb:34-34
+    ai_find_agent_chat  [call]  bl/ai.rb:225-237
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    ai_open_agent_chat  [call]  bl/ai.rb:240-246
+      ai_find_agent_chat  [call]  bl/ai.rb:225-237  (seen)
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+    ai_chat_msgs  [call]  bl/ai.rb:207-209
+    ai_public_msg  [call]  bl/ai.rb:211-217
+
+POST /ai/msgs  ->  POST /ai/msgs
+  POST /ai/msgs  [handler]  bl/ai.rb:365-376
+    require_user_ajax  [call]  mw/halts.rb:33-35
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+    cu  [ambiguous]  scheduler.rb:36-36  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    halt_bad_input  [call]  mw/halts.rb:13-15
+    ai_rate_limited?  [call]  bl/ai.rb:219-221
+      AI_RATE_WINDOW.ago  [model_call]    (leaf)
+    ai_open_agent_chat  [call]  bl/ai.rb:240-246
+      ai_find_agent_chat  [call]  bl/ai.rb:225-237
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+          Hash#hwia  [call]  my_lib.rb:15-17
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+    ai_agent  [call]  bl/ai.rb:192-195
+      AI_AGENTS.keys  [model_call]    (leaf)
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+    ai_stream_reply  [call]  bl/ai.rb:380-415
+      ai_chat_agent  [call]  bl/ai.rb:197-199
+        ai_agent  [call]  bl/ai.rb:192-195  (seen)
+      ai_stream_events  [call]  bl/ai.rb:339-360
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126
+          cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36  (seen)
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      FlashMessage#message  [call]  mw/flash.rb:16-20
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+      paamonim_update_family  [call]  bl/paamonim.rb:118-161
+        paamonim_family_chats  [call]  bl/paamonim.rb:87-89
+        paamonim_family_msgs  [call]  bl/paamonim.rb:91-93
+        CGI.unescapeHTML  [model_call]    (leaf)
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+        PAAMONIM_FIELDS.keys  [model_call]    (leaf)
+        paamonim_clean_file  [call]  bl/paamonim.rb:96-112
+          PAAMONIM_FIELDS.to_h  [model_call]    (leaf)
+          Hash#compact  [call]  my_lib.rb:19-21
+        Helpers#log_e  [call]  mw/error_handling.rb:6-16  (seen)
+    ai_build_messages  [call]  bl/ai.rb:269-276
+      CGI.unescapeHTML  [model_call]    (leaf)
+      ai_chat_agent  [call]  bl/ai.rb:197-199  (seen)
+      paamonim_family_context  [call]  bl/paamonim.rb:164-173
+        PAAMONIM_FIELDS.keys  [model_call]    (leaf)
+      ai_chat_msgs  [call]  bl/ai.rb:207-209
+
+POST /area_posts/submit  ->  POST /area_posts/submit
+  POST /area_posts/submit  [handler]  bl/area_posts.rb:3-13
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+      cu_session  [call]  mw/middleware_incoming.rb:104-107
+        session  [call]  scheduler.rb:35-35
+      cu_token  [call]  mw/middleware_incoming.rb:95-102
+        request_header  [call]  mw/middleware_incoming.rb:86-88
+    cu  [ambiguous]  scheduler.rb:36-36
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35  (seen)
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+
+POST /area_posts/delete/:id  ->  POST /area_posts/delete/:id
+  POST /area_posts/delete/:id  [handler]  bl/area_posts.rb:15-25
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+    is_admin  [call]  admin/admin.rb:184-191
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35  (seen)
+
+GET /articles/:topic/:title  ->  GET /articles/:topic/:title
+  GET /articles/:topic/:title  [handler]  bl/articles.rb:34-37
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+POST /request_indydevs_consultant  ->  POST /request_indydevs_consultant
+  POST /request_indydevs_consultant  [handler]  bl/black.rb:17-26
+    Hash#just  [ambiguous]  my_lib.rb:2-8
+    Array#just  [ambiguous]  my_lib.rb:25-27
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    send_email  [call]  comm/emails.rb:21-52
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Hash#compact  [call]  my_lib.rb:19-21
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126
+          cu  [call]  mw/middleware_incoming.rb:109-120
+            cu_session  [call]  mw/middleware_incoming.rb:104-107  (truncated)
+            cu_token  [call]  mw/middleware_incoming.rb:95-102  (truncated)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+
+GET /blog/:id/:title  ->  GET /blog/:id/:title
+  GET /blog/:id/:title  [handler]  bl/blog.rb:7-11
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+POST /admin/blog/new_post  ->  POST /admin/blog/new_post
+  POST /admin/blog/new_post  [handler]  bl/blog.rb:19-26
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+
+POST /admin/blog/edit_post  ->  POST /admin/blog/edit_post
+  POST /admin/blog/edit_post  [handler]  bl/blog.rb:28-36
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    CGI.unescapeHTML  [model_call]    (leaf)
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+
+POST /admin/blog/:id/toggle  ->  POST /admin/blog/:id/toggle
+  POST /admin/blog/:id/toggle  [handler]  bl/blog.rb:38-43
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+
+GET /pro  ->  GET /pro
+  GET /pro  [handler]  bl/casts.rb:385-389
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    show_cast_by_id  [call]  bl/casts.rb:533-551
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93  (seen)
+      pr  [ambiguous]  scheduler.rb:34-34  (seen)
+      can_watch  [call]  bl/casts.rb:117-120
+        is_chat_cast  [call]  bl/chat.rb:18-20
+        can_watch_chat_cast  [call]  bl/chat.rb:22-24
+          cuid  [call]  mw/middleware_incoming.rb:123-126
+            cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+        user_enrolled  [call]  bl/enrollment.rb:50-58
+          Helpers#log_e  [call]  mw/error_handling.rb:6-16
+            cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+            cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+            cu  [ambiguous]  scheduler.rb:36-36  (seen)
+            request_path  [call]  mw/middleware_incoming.rb:128-130  (truncated)
+            _params  [call]  mw/middleware_incoming.rb:140-142  (truncated)
+            Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (truncated)
+        cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+      cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+      is_admin  [call]  admin/admin.rb:184-191
+      clear_cast_chat  [call]  bl/chat.rb:51-54
+      flash  [call]  mw/flash.rb:24-26  (seen)
+      default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /silver  ->  GET /silver
+  GET /silver  [handler]  bl/casts.rb:391-395
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    show_cast_by_id  [call]  bl/casts.rb:533-551
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93  (seen)
+      pr  [ambiguous]  scheduler.rb:34-34  (seen)
+      can_watch  [call]  bl/casts.rb:117-120
+        is_chat_cast  [call]  bl/chat.rb:18-20
+        can_watch_chat_cast  [call]  bl/chat.rb:22-24
+          cuid  [call]  mw/middleware_incoming.rb:123-126
+            cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+        user_enrolled  [call]  bl/enrollment.rb:50-58
+          Helpers#log_e  [call]  mw/error_handling.rb:6-16
+            cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+            cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+            cu  [ambiguous]  scheduler.rb:36-36  (seen)
+            request_path  [call]  mw/middleware_incoming.rb:128-130  (truncated)
+            _params  [call]  mw/middleware_incoming.rb:140-142  (truncated)
+            Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (truncated)
+        cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+      cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+      is_admin  [call]  admin/admin.rb:184-191
+      clear_cast_chat  [call]  bl/chat.rb:51-54
+      flash  [call]  mw/flash.rb:24-26  (seen)
+      default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /casts/edit/:id  ->  GET /casts/edit/:id
+  GET /casts/edit/:id  [handler]  bl/casts.rb:434-437
+    require_cast_owner  [call]  bl/casts.rb:355-359
+      cuid  [call]  mw/middleware_incoming.rb:123-126
+        cu  [call]  mw/middleware_incoming.rb:109-120
+          cu_session  [call]  mw/middleware_incoming.rb:104-107
+            session  [call]  scheduler.rb:35-35  (truncated)
+          cu_token  [call]  mw/middleware_incoming.rb:95-102
+            request_header  [call]  mw/middleware_incoming.rb:86-88  (truncated)
+      is_admin  [call]  admin/admin.rb:184-191
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+POST /casts/edit/:id  ->  POST /casts/edit/:id
+  POST /casts/edit/:id  [handler]  bl/casts.rb:439-483
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    CAST_AMENITIES_NAMES.to_a  [model_call]    (leaf)
+    add_new_cast  [call]  bl/casts.rb:405-424
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93  (seen)
+      pr  [ambiguous]  scheduler.rb:34-34  (seen)
+      cuid  [call]  mw/middleware_incoming.rb:123-126
+        cu  [call]  mw/middleware_incoming.rb:109-120
+          cu_session  [call]  mw/middleware_incoming.rb:104-107
+            session  [call]  scheduler.rb:35-35  (truncated)
+          cu_token  [call]  mw/middleware_incoming.rb:95-102
+            request_header  [call]  mw/middleware_incoming.rb:86-88  (truncated)
+      DateTime.now  [model_call]    (leaf)
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80
+        Hash#hwia  [call]  my_lib.rb:15-17
+    require_cast_owner  [call]  bl/casts.rb:355-359
+      cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+      is_admin  [call]  admin/admin.rb:184-191
+    Hash#just_keys  [call]  my_lib.rb:10-13
+      Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+    is_admin  [call]  admin/admin.rb:184-191  (seen)
+    DateTime.parse  [model_call]    (leaf)
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+    cu  [ambiguous]  scheduler.rb:36-36
+    cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35  (seen)
+
+GET /casts/duplicate/:id  ->  GET /casts/duplicate/:id
+  GET /casts/duplicate/:id  [handler]  bl/casts.rb:485-491
+    require_cast_owner  [call]  bl/casts.rb:355-359
+      cuid  [call]  mw/middleware_incoming.rb:123-126
+        cu  [call]  mw/middleware_incoming.rb:109-120
+          cu_session  [call]  mw/middleware_incoming.rb:104-107
+            session  [call]  scheduler.rb:35-35  (truncated)
+          cu_token  [call]  mw/middleware_incoming.rb:95-102
+            request_header  [call]  mw/middleware_incoming.rb:86-88  (truncated)
+      is_admin  [call]  admin/admin.rb:184-191
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    String#without  [call]  my_lib.rb:183-185
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35  (seen)
+
+POST /casts/passcode/:id  ->  POST /casts/passcode/:id
+  POST /casts/passcode/:id  [handler]  bl/casts.rb:493-502
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cast_private_passcode_session_key  [call]  bl/casts.rb:276-278
+    session  [call]  scheduler.rb:35-35
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35  (seen)
+
+POST /casts/delete/:id  ->  POST /casts/delete/:id
+  POST /casts/delete/:id  [handler]  bl/casts.rb:504-513
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    require_cast_owner  [call]  bl/casts.rb:355-359
+      cuid  [call]  mw/middleware_incoming.rb:123-126
+        cu  [call]  mw/middleware_incoming.rb:109-120
+          cu_session  [call]  mw/middleware_incoming.rb:104-107
+            session  [call]  scheduler.rb:35-35  (truncated)
+          cu_token  [call]  mw/middleware_incoming.rb:95-102
+            request_header  [call]  mw/middleware_incoming.rb:86-88  (truncated)
+      is_admin  [call]  admin/admin.rb:184-191
+    cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+    is_admin  [call]  admin/admin.rb:184-191  (seen)
+
+POST /pusher/auth/:cast_id  ->  POST /pusher/auth/:cast_id
+  POST /pusher/auth/:cast_id  [handler]  bl/casts.rb:515-527
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+      cu_session  [call]  mw/middleware_incoming.rb:104-107
+        session  [call]  scheduler.rb:35-35
+      cu_token  [call]  mw/middleware_incoming.rb:95-102
+        request_header  [call]  mw/middleware_incoming.rb:86-88
+    cu  [ambiguous]  scheduler.rb:36-36
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+
+GET /casts/:_id  ->  GET /casts/:_id
+  GET /casts/:_id  [handler]  bl/casts.rb:561-564
+    show_cast_by_id  [call]  bl/casts.rb:533-551
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+      pr  [ambiguous]  scheduler.rb:34-34
+      can_watch  [call]  bl/casts.rb:117-120
+        is_chat_cast  [call]  bl/chat.rb:18-20
+        can_watch_chat_cast  [call]  bl/chat.rb:22-24
+          cuid  [call]  mw/middleware_incoming.rb:123-126
+            cu  [call]  mw/middleware_incoming.rb:109-120  (truncated)
+        user_enrolled  [call]  bl/enrollment.rb:50-58
+          Helpers#log_e  [call]  mw/error_handling.rb:6-16
+            cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+            cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+            cu  [ambiguous]  scheduler.rb:36-36  (truncated)
+            request_path  [call]  mw/middleware_incoming.rb:128-130  (truncated)
+            _params  [call]  mw/middleware_incoming.rb:140-142  (truncated)
+            Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (truncated)
+        cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+      cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+      is_admin  [call]  admin/admin.rb:184-191
+      clear_cast_chat  [call]  bl/chat.rb:51-54
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35
+      default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /@*/:_id/:cast_title  ->  GET /@*/:_id/:cast_title
+  GET /@*/:_id/:cast_title  [handler]  bl/casts.rb:566-570
+    show_cast_by_id  [call]  bl/casts.rb:533-551
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+      pr  [ambiguous]  scheduler.rb:34-34
+      can_watch  [call]  bl/casts.rb:117-120
+        is_chat_cast  [call]  bl/chat.rb:18-20
+        can_watch_chat_cast  [call]  bl/chat.rb:22-24
+          cuid  [call]  mw/middleware_incoming.rb:123-126
+            cu  [call]  mw/middleware_incoming.rb:109-120  (truncated)
+        user_enrolled  [call]  bl/enrollment.rb:50-58
+          Helpers#log_e  [call]  mw/error_handling.rb:6-16
+            cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+            cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+            cu  [ambiguous]  scheduler.rb:36-36  (truncated)
+            request_path  [call]  mw/middleware_incoming.rb:128-130  (truncated)
+            _params  [call]  mw/middleware_incoming.rb:140-142  (truncated)
+            Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (truncated)
+        cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+      cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+      is_admin  [call]  admin/admin.rb:184-191
+      clear_cast_chat  [call]  bl/chat.rb:51-54
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35
+      default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /@*  ->  GET /@*
+  GET /@*  [handler]  bl/casts.rb:575-589
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+      cu_session  [call]  mw/middleware_incoming.rb:104-107
+        session  [call]  scheduler.rb:35-35  (seen)
+      cu_token  [call]  mw/middleware_incoming.rb:95-102
+        request_header  [call]  mw/middleware_incoming.rb:86-88
+    cu  [ambiguous]  scheduler.rb:36-36
+    _req  [call]  mw/middleware_incoming.rb:136-138
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /chat/open  ->  GET /chat/open
+  GET /chat/open  [handler]  bl/chat.rb:87-91
+    get_unread_chats_ouids  [call]  bl/chat.rb:66-76
+      get_my_chats  [call]  bl/chat.rb:35-45
+        Mongo::Collection#get_many  [call]  db/mongo_extension.rb:8-13
+      chat_cast_ouid  [call]  bl/chat.rb:47-49
+        String#without  [call]  my_lib.rb:183-185
+        cuid  [call]  mw/middleware_incoming.rb:123-126
+          cu  [call]  mw/middleware_incoming.rb:109-120
+            cu_session  [call]  mw/middleware_incoming.rb:104-107  (truncated)
+            cu_token  [call]  mw/middleware_incoming.rb:95-102  (truncated)
+    cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+
+GET /chat/:cast_id/all  ->  GET /chat/:cast_id/all
+  GET /chat/:cast_id/all  [handler]  bl/chat.rb:93-98
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+      cu_session  [call]  mw/middleware_incoming.rb:104-107
+        session  [call]  scheduler.rb:35-35
+      cu_token  [call]  mw/middleware_incoming.rb:95-102
+        request_header  [call]  mw/middleware_incoming.rb:86-88
+    cu  [ambiguous]  scheduler.rb:36-36
+
+POST /chat/send  ->  POST /chat/send
+  POST /chat/send  [handler]  bl/chat.rb:102-191
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+    cu  [ambiguous]  scheduler.rb:36-36
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    add_user  [call]  bl/users.rb:348-402
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93  (seen)
+      pr  [ambiguous]  scheduler.rb:34-34  (seen)
+      Mongo::Collection#available_field  [call]  db/mongo_extension.rb:60-67
+        Mongo::Collection#exists?  [call]  db/mongo_extension.rb:32-34
+          Mongo::Collection#get_many  [call]  db/mongo_extension.rb:8-13
+        Mongo::Collection#available_field  [call]  db/mongo_extension.rb:60-67  (cycle)
+      BCrypt::Password.create  [model_call]    (leaf)
+      session  [call]  scheduler.rb:35-35  (seen)
+      _req  [call]  mw/middleware_incoming.rb:136-138
+      geocode  [call]  logging/requests_log.rb:21-23
+        Geocoder.search  [model_call]    (leaf)
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80
+        Hash#hwia  [call]  my_lib.rb:15-17
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    session  [call]  scheduler.rb:35-35  (seen)
+    ensure_chat_exists  [call]  bl/chat.rb:26-33
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+    Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+    silenced_key  [call]  bl/chat.rb:14-16
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+    is_chat_cast  [call]  bl/chat.rb:18-20
+    chat_cast_ouid  [call]  bl/chat.rb:47-49
+      String#without  [call]  my_lib.rb:183-185
+      cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+    cast_chat_channel  [call]  bl/chat.rb:10-12
+    send_email  [call]  comm/emails.rb:21-52
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Hash#compact  [call]  my_lib.rb:19-21
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36  (seen)
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138  (seen)
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+    flash  [call]  mw/flash.rb:24-26  (seen)
+
+POST /chat/silence  ->  POST /chat/silence
+  POST /chat/silence  [handler]  bl/chat.rb:267-276
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    require_cast_owner  [call]  bl/casts.rb:355-359
+      cuid  [call]  mw/middleware_incoming.rb:123-126
+        cu  [call]  mw/middleware_incoming.rb:109-120
+          cu_session  [call]  mw/middleware_incoming.rb:104-107
+            session  [call]  scheduler.rb:35-35  (truncated)
+          cu_token  [call]  mw/middleware_incoming.rb:95-102
+            request_header  [call]  mw/middleware_incoming.rb:86-88  (truncated)
+      is_admin  [call]  admin/admin.rb:184-191
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+    silenced_key  [call]  bl/chat.rb:14-16
+    cast_chat_channel  [call]  bl/chat.rb:10-12
+
+POST /chat/delete_msg  ->  POST /chat/delete_msg
+  POST /chat/delete_msg  [handler]  bl/chat.rb:278-293
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+    is_admin  [call]  admin/admin.rb:184-191
+    cast_chat_channel  [call]  bl/chat.rb:10-12
+
+POST /convo/msgs  ->  POST /convo/msgs
+  POST /convo/msgs  [handler]  bl/convo.rb:11-21
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+    cu  [ambiguous]  scheduler.rb:36-36
+    send_email  [call]  comm/emails.rb:21-52
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Hash#compact  [call]  my_lib.rb:19-21
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36  (seen)
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35  (seen)
+
+GET /customers/:id  ->  GET /customers/:id
+  GET /customers/:id  [handler]  bl/customers.rb:6-11
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+POST /customers  ->  POST /customers
+  POST /customers  [handler]  bl/customers.rb:13-17
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35  (seen)
+
+POST /customers/:id  ->  POST /customers/:id
+  POST /customers/:id  [handler]  bl/customers.rb:19-25
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35  (seen)
+
+POST /enrollment/cancel  ->  POST /enrollment/cancel
+  POST /enrollment/cancel  [handler]  bl/enrollment.rb:122-133
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cancel_enroll  [call]  bl/enrollment.rb:100-113
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17
+      cancel_stripe_sub  [call]  bl/stripe.rb:186-189
+        Stripe::Subscription.delete  [model_call]    (leaf)
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+      cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36  (seen)
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+          nice_id  [call]  my_lib.rb:75-80
+          Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+
+POST /enrolls  ->  POST /enrolls
+  POST /enrolls  [handler]  bl/enrollment.rb:135-145
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    Mongo::Collection#get_many  [call]  db/mongo_extension.rb:8-13
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+
+POST /cashless_enroll  ->  POST /cashless_enroll
+  POST /cashless_enroll  [handler]  bl/enrollment.rb:147-162
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    require_fields  [call]  mw/halts.rb:29-31
+      halt_missing_param  [call]  mw/halts.rb:17-19
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Hash#just  [ambiguous]  my_lib.rb:2-8
+    Array#just  [ambiguous]  my_lib.rb:25-27
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    flash  [call]  mw/flash.rb:24-26  (seen)
+
+POST /enrolls/:id  ->  POST /enrolls/:id
+  POST /enrolls/:id  [handler]  bl/enrollment.rb:164-174
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+
+POST /joinFree  ->  POST /joinFree
+  POST /joinFree  [handler]  bl/enrollment.rb:176-186
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cast_free  [call]  bl/casts.rb:225-227
+    cast_allows_variable_amount  [call]  bl/casts.rb:182-184
+    verify_signup_data  [call]  bl/users.rb:279-346
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93  (seen)
+      pr  [ambiguous]  scheduler.rb:34-34  (seen)
+      nice_id  [call]  my_lib.rb:75-80
+      Faker::Name.name  [model_call]    (leaf)
+      check_team_member_name  [call]  bl/users.rb:268-277
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35
+      flash_err  [call]  mw/middleware_outgoing.rb:1-4
+        session  [call]  scheduler.rb:35-35  (seen)
+        flash  [call]  mw/flash.rb:24-26  (seen)
+      looks_like_phone_number  [call]  bl/users.rb:264-266
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+      cu_session  [call]  mw/middleware_incoming.rb:104-107
+        session  [call]  scheduler.rb:35-35  (seen)
+      cu_token  [call]  mw/middleware_incoming.rb:95-102
+        request_header  [call]  mw/middleware_incoming.rb:86-88
+    cu  [ambiguous]  scheduler.rb:36-36
+    add_user  [call]  bl/users.rb:348-402
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93  (seen)
+      pr  [ambiguous]  scheduler.rb:34-34  (seen)
+      Mongo::Collection#available_field  [call]  db/mongo_extension.rb:60-67
+        Mongo::Collection#exists?  [call]  db/mongo_extension.rb:32-34
+          Mongo::Collection#get_many  [call]  db/mongo_extension.rb:8-13
+        Mongo::Collection#available_field  [call]  db/mongo_extension.rb:60-67  (cycle)
+      BCrypt::Password.create  [model_call]    (leaf)
+      session  [call]  scheduler.rb:35-35  (seen)
+      _req  [call]  mw/middleware_incoming.rb:136-138
+      geocode  [call]  logging/requests_log.rb:21-23
+        Geocoder.search  [model_call]    (leaf)
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80  (seen)
+        Hash#hwia  [call]  my_lib.rb:15-17
+      flash  [call]  mw/flash.rb:24-26  (seen)
+    enroll_user  [call]  bl/enrollment.rb:12-41
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      is_pro_cast  [call]  bl/casts.rb:361-363
+      send_email  [call]  comm/emails.rb:21-52
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+        Hash#compact  [call]  my_lib.rb:19-21
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+        Helpers#log_e  [call]  mw/error_handling.rb:6-16
+          cuid  [call]  mw/middleware_incoming.rb:123-126
+            cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+          cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+          cu  [ambiguous]  scheduler.rb:36-36  (seen)
+          request_path  [call]  mw/middleware_incoming.rb:128-130
+            _req  [call]  mw/middleware_incoming.rb:136-138  (seen)
+          _params  [call]  mw/middleware_incoming.rb:140-142
+          Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      send_enrollment_emails  [call]  bl/enrollment.rb:86-98
+        email_by_view  [call]  comm/emails.rb:110-112
+        send_email  [call]  comm/emails.rb:21-52  (seen)
+      add_user_as_customer  [call]  bl/enrollment.rb:43-48
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16  (seen)
+    cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+
+GET /ext/id  ->  GET /ext/id
+  GET /ext/id  [handler]  bl/extension_backend.rb:1-3
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+
+GET /forum/:thread_id  ->  GET /forum/:thread_id
+  GET /forum/:thread_id  [handler]  bl/forum.rb:12-14
+
+POST /forum/threads  ->  POST /forum/threads
+  POST /forum/threads  [handler]  bl/forum.rb:16-24
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    flash  [call]  mw/flash.rb:24-26  (seen)
+
+POST /forum/:thread_id/msgs  ->  POST /forum/:thread_id/msgs
+  POST /forum/:thread_id/msgs  [handler]  bl/forum.rb:26-34
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    flash  [call]  mw/flash.rb:24-26  (seen)
+
+GET /forum/:thread_id/:thread_title  ->  GET /forum/:thread_id/:thread_title
+  GET /forum/:thread_id/:thread_title  [handler]  bl/forum.rb:36-38
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+POST /casts/game/move/:cast_id  ->  POST /casts/game/move/:cast_id
+  POST /casts/game/move/:cast_id  [handler]  bl/games.rb:23-54
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    get_cast_game  [call]  bl/games.rb:19-21
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80
+        Hash#hwia  [call]  my_lib.rb:15-17
+      game_default_board  [call]  bl/games.rb:11-17
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    clean_user  [call]  bl/users.rb:251-257
+      Hash#just  [ambiguous]  my_lib.rb:2-8
+      Array#just  [ambiguous]  my_lib.rb:25-27
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36  (seen)
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+    cu  [ambiguous]  scheduler.rb:36-36  (seen)
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+
+GET /games/:cast_id  ->  GET /games/:cast_id
+  GET /games/:cast_id  [handler]  bl/games.rb:56-58
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+
+GET /google_redirect_uri  ->  GET /google_redirect_uri
+  GET /google_redirect_uri  [handler]  bl/google_auth.rb:17-64
+    CGI.unescapeHTML  [model_call]    (leaf)
+    Hash#hwia  [call]  my_lib.rb:15-17
+    session  [call]  scheduler.rb:35-35
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+
+GET /haifacity  ->  GET /haifacity
+  GET /haifacity  [handler]  bl/haifacity.rb:208-215
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    session  [call]  scheduler.rb:35-35
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+      cu_session  [call]  mw/middleware_incoming.rb:104-107
+        session  [call]  scheduler.rb:35-35  (seen)
+      cu_token  [call]  mw/middleware_incoming.rb:95-102
+        request_header  [call]  mw/middleware_incoming.rb:86-88
+    cu  [ambiguous]  scheduler.rb:36-36
+    haifacity_dm_history  [call]  bl/haifacity.rb:184-186
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    haifacity_group_msgs  [call]  bl/haifacity.rb:106-108
+    haifacity_public_msg  [call]  bl/haifacity.rb:101-103
+
+POST /haifacity/group/msgs  ->  POST /haifacity/group/msgs
+  POST /haifacity/group/msgs  [handler]  bl/haifacity.rb:222-242
+    require_user_ajax  [call]  mw/halts.rb:33-35
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+    cu  [ambiguous]  scheduler.rb:36-36  (seen)
+    haifacity_input_text  [call]  bl/haifacity.rb:97-99
+      CGI.unescapeHTML  [model_call]    (leaf)
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+      pr  [ambiguous]  scheduler.rb:34-34
+    halt_bad_input  [call]  mw/halts.rb:13-15
+    hc_t  [call]  bl/haifacity_i18n.rb:131-134
+      haifacity_lang  [call]  bl/haifacity_i18n.rb:125-129
+        session  [call]  scheduler.rb:35-35  (seen)
+    haifacity_muted?  [call]  bl/haifacity.rb:127-129
+      HAIFACITY_STRIKE_WINDOW.ago  [model_call]    (leaf)
+    haifacity_display_name  [call]  bl/haifacity.rb:88-94
+      CGI.unescapeHTML  [model_call]    (leaf)
+    haifacity_flagged_categories  [call]  bl/haifacity.rb:132-139
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126
+          cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36  (seen)
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+          nice_id  [call]  my_lib.rb:75-80
+          Hash#hwia  [call]  my_lib.rb:15-17
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+    haifacity_add_group_msg  [call]  bl/haifacity.rb:121-125
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      haifacity_broadcast  [call]  bl/haifacity.rb:115-119
+        Helpers#log_e  [call]  mw/error_handling.rb:6-16  (seen)
+      haifacity_public_msg  [call]  bl/haifacity.rb:101-103
+    haifacity_triage  [call]  bl/haifacity.rb:145-182
+      haifacity_group_msgs  [call]  bl/haifacity.rb:106-108
+      HAIFACITY_RULES.key?  [model_call]    (leaf)
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      haifacity_broadcast  [call]  bl/haifacity.rb:115-119  (seen)
+      haifacity_add_group_msg  [call]  bl/haifacity.rb:121-125  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16  (seen)
+    haifacity_public_msg  [call]  bl/haifacity.rb:101-103  (seen)
+
+POST /haifacity/group/msgs/:id/remove  ->  POST /haifacity/group/msgs/:id/remove
+  POST /haifacity/group/msgs/:id/remove  [handler]  bl/haifacity.rb:244-251
+    halt_forbidden  [call]  mw/halts.rb:9-11
+    is_admin  [call]  admin/admin.rb:184-191
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+    haifacity_broadcast  [call]  bl/haifacity.rb:115-119
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+          nice_id  [call]  my_lib.rb:75-80
+          Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+
+POST /haifacity/ai/msgs  ->  POST /haifacity/ai/msgs
+  POST /haifacity/ai/msgs  [handler]  bl/haifacity.rb:254-294
+    require_user_ajax  [call]  mw/halts.rb:33-35
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+    cu  [ambiguous]  scheduler.rb:36-36  (seen)
+    haifacity_input_text  [call]  bl/haifacity.rb:97-99
+      CGI.unescapeHTML  [model_call]    (leaf)
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+      pr  [ambiguous]  scheduler.rb:34-34
+    halt_bad_input  [call]  mw/halts.rb:13-15
+    hc_t  [call]  bl/haifacity_i18n.rb:131-134
+      haifacity_lang  [call]  bl/haifacity_i18n.rb:125-129
+        session  [call]  scheduler.rb:35-35  (seen)
+    AI_RATE_WINDOW.ago  [model_call]    (leaf)
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    haifacity_dm_messages  [call]  bl/haifacity.rb:188-197
+      haifacity_display_name  [call]  bl/haifacity.rb:88-94
+        CGI.unescapeHTML  [model_call]    (leaf)
+      haifacity_group_msgs  [call]  bl/haifacity.rb:106-108
+      haifacity_lang  [call]  bl/haifacity_i18n.rb:125-129  (seen)
+      haifacity_dm_history  [call]  bl/haifacity.rb:184-186
+    ai_stream_events  [call]  bl/ai.rb:339-360
+    Helpers#log_e  [call]  mw/error_handling.rb:6-16
+      cuid  [call]  mw/middleware_incoming.rb:123-126
+        cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+      cu  [ambiguous]  scheduler.rb:36-36  (seen)
+      request_path  [call]  mw/middleware_incoming.rb:128-130
+        _req  [call]  mw/middleware_incoming.rb:136-138
+      _params  [call]  mw/middleware_incoming.rb:140-142
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+    FlashMessage#message  [call]  mw/flash.rb:16-20
+
+POST /haifacity/ai/clear  ->  POST /haifacity/ai/clear
+  POST /haifacity/ai/clear  [handler]  bl/haifacity.rb:296-300
+    require_user_ajax  [call]  mw/halts.rb:33-35
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+
+POST /hiring_post  ->  POST /hiring_post
+  POST /hiring_post  [handler]  bl/hiring_posts.rb:4-29
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+    cu  [ambiguous]  scheduler.rb:36-36  (seen)
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    is_admin  [call]  admin/admin.rb:184-191
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    flash  [call]  mw/flash.rb:24-26  (seen)
+    send_email  [call]  comm/emails.rb:21-52
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Hash#compact  [call]  my_lib.rb:19-21
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36  (seen)
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+
+GET /remove_hiring_post  ->  GET /remove_hiring_post
+  GET /remove_hiring_post  [handler]  bl/hiring_posts.rb:31-46
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    is_admin  [call]  admin/admin.rb:184-191
+    flash  [call]  mw/flash.rb:24-26  (seen)
+    send_email  [call]  comm/emails.rb:21-52
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80
+        Hash#hwia  [call]  my_lib.rb:15-17
+      Hash#compact  [call]  my_lib.rb:19-21
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36  (seen)
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+
+POST /hiring_lead  ->  POST /hiring_lead
+  POST /hiring_lead  [handler]  bl/hiring_posts.rb:48-56
+    Hash#just  [ambiguous]  my_lib.rb:2-8
+    Array#just  [ambiguous]  my_lib.rb:25-27
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    send_email  [call]  comm/emails.rb:21-52
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Hash#compact  [call]  my_lib.rb:19-21
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126
+          cu  [call]  mw/middleware_incoming.rb:109-120
+            cu_session  [call]  mw/middleware_incoming.rb:104-107  (truncated)
+            cu_token  [call]  mw/middleware_incoming.rb:95-102  (truncated)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35
+
+GET /upvote_post/:post_id  ->  GET /upvote_post/:post_id
+  GET /upvote_post/:post_id  [handler]  bl/hiring_posts.rb:58-72
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+    flash  [call]  mw/flash.rb:24-26  (seen)
+
+GET /hoffa  ->  GET /hoffa
+  GET /hoffa  [handler]  bl/hoffa.rb:3-6
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+      cu_session  [call]  mw/middleware_incoming.rb:104-107
+        session  [call]  scheduler.rb:35-35
+      cu_token  [call]  mw/middleware_incoming.rb:95-102
+        request_header  [call]  mw/middleware_incoming.rb:86-88
+    cu  [ambiguous]  scheduler.rb:36-36
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+POST /hoffa/post  ->  POST /hoffa/post
+  POST /hoffa/post  [handler]  bl/hoffa.rb:8-15
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    Hash#just  [ambiguous]  my_lib.rb:2-8
+    Array#just  [ambiguous]  my_lib.rb:25-27
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+
+GET /jobs  ->  GET /jobs
+  GET /jobs  [handler]  bl/indydevs.rb:95-99
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /jobs/search  ->  GET /jobs/search
+  GET /jobs/search  [handler]  bl/indydevs.rb:151-158
+    get_posts  [call]  bl/indydevs.rb:53-55
+      Mongo::Collection#all  [call]  db/mongo_extension.rb:20-22
+        Mongo::Collection#get_many  [call]  db/mongo_extension.rb:8-13
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+
+GET /jobs/:_id  ->  GET /jobs/:_id
+  GET /jobs/:_id  [handler]  bl/indydevs.rb:160-166
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    is_admin  [call]  admin/admin.rb:184-191
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+POST /jobs/job_views  ->  POST /jobs/job_views
+  POST /jobs/job_views  [handler]  bl/indydevs.rb:168-175
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+
+POST /job  ->  POST /job
+  POST /job  [handler]  bl/indydevs.rb:209-218
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    add_job  [call]  bl/indydevs.rb:178-207
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+      pr  [ambiguous]  scheduler.rb:34-34
+      Hash#just  [ambiguous]  my_lib.rb:2-8
+      Array#just  [ambiguous]  my_lib.rb:25-27
+      RICH_JOB_FIELDS.mapo  [model_call]    (leaf)
+      clean_user  [call]  bl/users.rb:251-257
+        Hash#just  [ambiguous]  my_lib.rb:2-8  (seen)
+        Array#just  [ambiguous]  my_lib.rb:25-27  (seen)
+        Helpers#log_e  [call]  mw/error_handling.rb:6-16
+          cuid  [call]  mw/middleware_incoming.rb:123-126
+            cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+          cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+          cu  [ambiguous]  scheduler.rb:36-36  (seen)
+          request_path  [call]  mw/middleware_incoming.rb:128-130
+            _req  [call]  mw/middleware_incoming.rb:136-138  (truncated)
+          _params  [call]  mw/middleware_incoming.rb:140-142
+          Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+            nice_id  [call]  my_lib.rb:75-80  (truncated)
+            Hash#hwia  [call]  my_lib.rb:15-17  (truncated)
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      send_email  [call]  comm/emails.rb:21-52
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+        Hash#compact  [call]  my_lib.rb:19-21
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+          Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+        Helpers#log_e  [call]  mw/error_handling.rb:6-16  (seen)
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+    cu  [ambiguous]  scheduler.rb:36-36  (seen)
+    flash  [call]  mw/flash.rb:24-26  (seen)
+
+POST /edit_job/:id  ->  POST /edit_job/:id
+  POST /edit_job/:id  [handler]  bl/indydevs.rb:220-237
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    is_admin  [call]  admin/admin.rb:184-191
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+    flash  [call]  mw/flash.rb:24-26  (seen)
+
+POST /edit_job_rich_fields/:id  ->  POST /edit_job_rich_fields/:id
+  POST /edit_job_rich_fields/:id  [handler]  bl/indydevs.rb:239-249
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    Hash#just  [ambiguous]  my_lib.rb:2-8
+    Array#just  [ambiguous]  my_lib.rb:25-27
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    RICH_JOB_FIELDS.mapo  [model_call]    (leaf)
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    is_admin  [call]  admin/admin.rb:184-191
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+    flash  [call]  mw/flash.rb:24-26  (seen)
+
+POST /jobs/apply2  ->  POST /jobs/apply2
+  POST /jobs/apply2  [handler]  bl/indydevs.rb:259-286
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    send_email  [call]  comm/emails.rb:21-52
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Hash#compact  [call]  my_lib.rb:19-21
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126
+          cu  [call]  mw/middleware_incoming.rb:109-120
+            cu_session  [call]  mw/middleware_incoming.rb:104-107  (truncated)
+            cu_token  [call]  mw/middleware_incoming.rb:95-102  (truncated)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+
+POST /apply_cv_attachment  ->  POST /apply_cv_attachment
+  POST /apply_cv_attachment  [handler]  bl/indydevs.rb:288-317
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    nice_datetime  [call]  my_lib.rb:134-136
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    send_email  [call]  comm/emails.rb:21-52
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Hash#compact  [call]  my_lib.rb:19-21
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126
+          cu  [call]  mw/middleware_incoming.rb:109-120
+            cu_session  [call]  mw/middleware_incoming.rb:104-107  (truncated)
+            cu_token  [call]  mw/middleware_incoming.rb:95-102  (truncated)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35
+
+GET /delete_job/:job_id  ->  GET /delete_job/:job_id
+  GET /delete_job/:job_id  [handler]  bl/indydevs.rb:337-350
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    is_admin  [call]  admin/admin.rb:184-191
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    flash  [call]  mw/flash.rb:24-26  (seen)
+
+POST /projects/new  ->  POST /projects/new
+  POST /projects/new  [handler]  bl/indydevs.rb:359-365
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    flash  [call]  mw/flash.rb:24-26  (seen)
+
+GET /projects/delete/:proj_id  ->  GET /projects/delete/:proj_id
+  GET /projects/delete/:proj_id  [handler]  bl/indydevs.rb:367-373
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    flash  [call]  mw/flash.rb:24-26  (seen)
+
+POST /projects/edit/:proj_id  ->  POST /projects/edit/:proj_id
+  POST /projects/edit/:proj_id  [handler]  bl/indydevs.rb:375-382
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+
+POST /skills/new  ->  POST /skills/new
+  POST /skills/new  [handler]  bl/indydevs.rb:385-389
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+
+GET /skills/:user_id  ->  GET /skills/:user_id
+  GET /skills/:user_id  [handler]  bl/indydevs.rb:391-396
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#get_many  [call]  db/mongo_extension.rb:8-13
+
+POST /skills/delete/:skill_id  ->  POST /skills/delete/:skill_id
+  POST /skills/delete/:skill_id  [handler]  bl/indydevs.rb:398-404
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    flash  [call]  mw/flash.rb:24-26  (seen)
+
+GET /connect  ->  GET /connect
+  GET /connect  [handler]  bl/indydevs.rb:468-487
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+      cu_session  [call]  mw/middleware_incoming.rb:104-107
+        session  [call]  scheduler.rb:35-35
+      cu_token  [call]  mw/middleware_incoming.rb:95-102
+        request_header  [call]  mw/middleware_incoming.rb:86-88
+    cu  [ambiguous]  scheduler.rb:36-36
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    send_email  [call]  comm/emails.rb:21-52
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80
+        Hash#hwia  [call]  my_lib.rb:15-17
+      Hash#compact  [call]  my_lib.rb:19-21
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36  (seen)
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+
+POST /indydevs/connect_with_manager  ->  POST /indydevs/connect_with_manager
+  POST /indydevs/connect_with_manager  [handler]  bl/indydevs.rb:489-500
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    send_email  [call]  comm/emails.rb:21-52
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Hash#compact  [call]  my_lib.rb:19-21
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126
+          cu  [call]  mw/middleware_incoming.rb:109-120
+            cu_session  [call]  mw/middleware_incoming.rb:104-107  (truncated)
+            cu_token  [call]  mw/middleware_incoming.rb:95-102  (truncated)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+
+POST /easy_job  ->  POST /easy_job
+  POST /easy_job  [handler]  bl/indydevs.rb:514-541
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#available_field  [call]  db/mongo_extension.rb:60-67
+      Mongo::Collection#exists?  [call]  db/mongo_extension.rb:32-34
+        Mongo::Collection#get_many  [call]  db/mongo_extension.rb:8-13
+      Mongo::Collection#available_field  [call]  db/mongo_extension.rb:60-67  (cycle)
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    add_job  [call]  bl/indydevs.rb:178-207
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93  (seen)
+      pr  [ambiguous]  scheduler.rb:34-34  (seen)
+      Hash#just  [ambiguous]  my_lib.rb:2-8
+      Array#just  [ambiguous]  my_lib.rb:25-27
+      RICH_JOB_FIELDS.mapo  [model_call]    (leaf)
+      clean_user  [call]  bl/users.rb:251-257
+        Hash#just  [ambiguous]  my_lib.rb:2-8  (seen)
+        Array#just  [ambiguous]  my_lib.rb:25-27  (seen)
+        Helpers#log_e  [call]  mw/error_handling.rb:6-16
+          cuid  [call]  mw/middleware_incoming.rb:123-126
+            cu  [call]  mw/middleware_incoming.rb:109-120  (truncated)
+          cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+          cu  [ambiguous]  scheduler.rb:36-36
+          request_path  [call]  mw/middleware_incoming.rb:128-130
+            _req  [call]  mw/middleware_incoming.rb:136-138  (truncated)
+          _params  [call]  mw/middleware_incoming.rb:140-142
+          Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      send_email  [call]  comm/emails.rb:21-52
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+        Hash#compact  [call]  my_lib.rb:19-21
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+          Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+        Helpers#log_e  [call]  mw/error_handling.rb:6-16  (seen)
+    send_email  [call]  comm/emails.rb:21-52  (seen)
+    email_by_view  [call]  comm/emails.rb:110-112
+    session  [call]  scheduler.rb:35-35
+
+POST /locations  ->  POST /locations
+  POST /locations  [handler]  bl/locations.rb:6-11
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35  (seen)
+
+GET /locations/:id  ->  GET /locations/:id
+  GET /locations/:id  [handler]  bl/locations.rb:13-18
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+POST /locations/:id  ->  POST /locations/:id
+  POST /locations/:id  [handler]  bl/locations.rb:20-32
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35  (seen)
+
+GET /submit  ->  GET /submit
+  GET /submit  [handler]  bl/newsfeed.rb:7-10
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /remove_news  ->  GET /remove_news
+  GET /remove_news  [handler]  bl/newsfeed.rb:12-26
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    is_admin  [call]  admin/admin.rb:184-191
+    flash  [call]  mw/flash.rb:24-26  (seen)
+
+POST /news  ->  POST /news
+  POST /news  [handler]  bl/newsfeed.rb:28-50
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+      cu_session  [call]  mw/middleware_incoming.rb:104-107
+        session  [call]  scheduler.rb:35-35
+      cu_token  [call]  mw/middleware_incoming.rb:95-102
+        request_header  [call]  mw/middleware_incoming.rb:86-88
+    cu  [ambiguous]  scheduler.rb:36-36
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35  (seen)
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    clean_user  [call]  bl/users.rb:251-257
+      Hash#just  [ambiguous]  my_lib.rb:2-8
+      Array#just  [ambiguous]  my_lib.rb:25-27
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36  (seen)
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+          nice_id  [call]  my_lib.rb:75-80
+          Hash#hwia  [call]  my_lib.rb:15-17
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+    send_email  [call]  comm/emails.rb:21-52
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Hash#compact  [call]  my_lib.rb:19-21
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16  (seen)
+
+POST /notes  ->  POST /notes
+  POST /notes  [handler]  bl/notes.rb:3-9
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+    cu  [ambiguous]  scheduler.rb:36-36
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+
+GET /office/:user_id  ->  GET /office/:user_id
+  GET /office/:user_id  [handler]  bl/office.rb:7-11
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /deck/:code  ->  GET /deck/:code
+  GET /deck/:code  [handler]  bl/other.rb:50-66
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Hash#hwia  [call]  my_lib.rb:15-17
+    send_email  [call]  comm/emails.rb:21-52
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Hash#compact  [call]  my_lib.rb:19-21
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126
+          cu  [call]  mw/middleware_incoming.rb:109-120
+            cu_session  [call]  mw/middleware_incoming.rb:104-107  (truncated)
+            cu_token  [call]  mw/middleware_incoming.rb:95-102  (truncated)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+
+GET /ai/paamonim/board  ->  GET /ai/paamonim/board
+  GET /ai/paamonim/board  [handler]  bl/paamonim.rb:209-216
+    require_paamonim_admin  [call]  bl/paamonim.rb:82-85
+      require_user  [call]  mw/halts.rb:37-42
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+          cu_session  [call]  mw/middleware_incoming.rb:104-107
+            session  [call]  scheduler.rb:35-35  (truncated)
+          cu_token  [call]  mw/middleware_incoming.rb:95-102
+            request_header  [call]  mw/middleware_incoming.rb:86-88  (truncated)
+        cu  [ambiguous]  scheduler.rb:36-36
+        flash  [call]  mw/flash.rb:24-26
+          FlashMessage#initialize  [call]  mw/flash.rb:8-10
+          session  [call]  scheduler.rb:35-35  (seen)
+      paamonim_admin?  [call]  bl/paamonim.rb:76-80
+        is_admin  [call]  admin/admin.rb:184-191
+    PAAMONIM_BOARD_FILTERS.key?  [model_call]    (leaf)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    PAAMONIM_BOARD_FILTERS.transform_values  [model_call]    (leaf)
+
+GET /ai/paamonim/families/:id  ->  GET /ai/paamonim/families/:id
+  GET /ai/paamonim/families/:id  [handler]  bl/paamonim.rb:218-225
+    require_paamonim_admin  [call]  bl/paamonim.rb:82-85
+      require_user  [call]  mw/halts.rb:37-42
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+          cu_session  [call]  mw/middleware_incoming.rb:104-107
+            session  [call]  scheduler.rb:35-35  (truncated)
+          cu_token  [call]  mw/middleware_incoming.rb:95-102
+            request_header  [call]  mw/middleware_incoming.rb:86-88  (truncated)
+        cu  [ambiguous]  scheduler.rb:36-36
+        flash  [call]  mw/flash.rb:24-26
+          FlashMessage#initialize  [call]  mw/flash.rb:8-10
+          session  [call]  scheduler.rb:35-35  (seen)
+      paamonim_admin?  [call]  bl/paamonim.rb:76-80
+        is_admin  [call]  admin/admin.rb:184-191
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    paamonim_family_chats  [call]  bl/paamonim.rb:87-89
+    paamonim_family_msgs  [call]  bl/paamonim.rb:91-93
+
+POST /ai/paamonim/families/:id  ->  POST /ai/paamonim/families/:id
+  POST /ai/paamonim/families/:id  [handler]  bl/paamonim.rb:228-236
+    require_paamonim_admin  [call]  bl/paamonim.rb:82-85
+      require_user  [call]  mw/halts.rb:37-42
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+          cu_session  [call]  mw/middleware_incoming.rb:104-107
+            session  [call]  scheduler.rb:35-35  (truncated)
+          cu_token  [call]  mw/middleware_incoming.rb:95-102
+            request_header  [call]  mw/middleware_incoming.rb:86-88  (truncated)
+        cu  [ambiguous]  scheduler.rb:36-36
+        flash  [call]  mw/flash.rb:24-26
+          FlashMessage#initialize  [call]  mw/flash.rb:8-10
+          session  [call]  scheduler.rb:35-35  (seen)
+      paamonim_admin?  [call]  bl/paamonim.rb:76-80
+        is_admin  [call]  admin/admin.rb:184-191
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    CGI.unescapeHTML  [model_call]    (leaf)
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+    cu  [ambiguous]  scheduler.rb:36-36  (seen)
+
+POST /ai/paamonim/families/:id/resolve  ->  POST /ai/paamonim/families/:id/resolve
+  POST /ai/paamonim/families/:id/resolve  [handler]  bl/paamonim.rb:238-247
+    require_paamonim_admin  [call]  bl/paamonim.rb:82-85
+      require_user  [call]  mw/halts.rb:37-42
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+          cu_session  [call]  mw/middleware_incoming.rb:104-107
+            session  [call]  scheduler.rb:35-35  (truncated)
+          cu_token  [call]  mw/middleware_incoming.rb:95-102
+            request_header  [call]  mw/middleware_incoming.rb:86-88  (truncated)
+        cu  [ambiguous]  scheduler.rb:36-36
+        flash  [call]  mw/flash.rb:24-26
+          FlashMessage#initialize  [call]  mw/flash.rb:8-10
+          session  [call]  scheduler.rb:35-35  (seen)
+      paamonim_admin?  [call]  bl/paamonim.rb:76-80
+        is_admin  [call]  admin/admin.rb:184-191
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+    cu  [ambiguous]  scheduler.rb:36-36  (seen)
+
+GET /pablo  ->  GET /pablo
+  GET /pablo  [handler]  bl/pablo.rb:90-95
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    ai_mark_seen  [call]  bl/ai.rb:248-250
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17
+    ai_open_agent_chat  [call]  bl/ai.rb:240-246
+      ai_find_agent_chat  [call]  bl/ai.rb:225-237
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    ai_chat_msgs  [call]  bl/ai.rb:207-209
+    ai_public_msg  [call]  bl/ai.rb:211-217
+
+POST /pablo/msgs  ->  POST /pablo/msgs
+  POST /pablo/msgs  [handler]  bl/pablo.rb:98-114
+    require_user_ajax  [call]  mw/halts.rb:33-35
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+    cu  [ambiguous]  scheduler.rb:36-36  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    pablo_platform  [call]  bl/pablo.rb:76-78
+      PABLO_PLATFORMS.keys  [model_call]    (leaf)
+    halt_bad_input  [call]  mw/halts.rb:13-15
+    ai_rate_limited?  [call]  bl/ai.rb:219-221
+      AI_RATE_WINDOW.ago  [model_call]    (leaf)
+    ai_open_agent_chat  [call]  bl/ai.rb:240-246
+      ai_find_agent_chat  [call]  bl/ai.rb:225-237
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+          Hash#hwia  [call]  my_lib.rb:15-17
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+    pablo_user_address  [call]  bl/pablo.rb:81-88
+      CGI.unescapeHTML  [model_call]    (leaf)
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+    ai_stream_reply  [call]  bl/ai.rb:380-415
+      ai_chat_agent  [call]  bl/ai.rb:197-199
+        ai_agent  [call]  bl/ai.rb:192-195
+          AI_AGENTS.keys  [model_call]    (leaf)
+      ai_stream_events  [call]  bl/ai.rb:339-360
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126
+          cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36  (seen)
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      FlashMessage#message  [call]  mw/flash.rb:16-20
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+      paamonim_update_family  [call]  bl/paamonim.rb:118-161
+        paamonim_family_chats  [call]  bl/paamonim.rb:87-89
+        paamonim_family_msgs  [call]  bl/paamonim.rb:91-93
+        CGI.unescapeHTML  [model_call]    (leaf)
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+        PAAMONIM_FIELDS.keys  [model_call]    (leaf)
+        paamonim_clean_file  [call]  bl/paamonim.rb:96-112
+          PAAMONIM_FIELDS.to_h  [model_call]    (leaf)
+          Hash#compact  [call]  my_lib.rb:19-21
+        Helpers#log_e  [call]  mw/error_handling.rb:6-16  (seen)
+    pablo_messages  [call]  bl/pablo.rb:116-119
+      ai_build_messages  [call]  bl/ai.rb:269-276
+        CGI.unescapeHTML  [model_call]    (leaf)
+        ai_chat_agent  [call]  bl/ai.rb:197-199  (seen)
+        paamonim_family_context  [call]  bl/paamonim.rb:164-173
+          PAAMONIM_FIELDS.keys  [model_call]    (leaf)
+        ai_chat_msgs  [call]  bl/ai.rb:207-209
+    pablo_deliver  [call]  bl/pablo.rb:125-132
+      pablo_deliver_whatsapp  [call]  bl/pablo.rb:145-159
+        pablo_phone_digits  [call]  bl/pablo.rb:139-143
+        pablo_user_address  [call]  bl/pablo.rb:81-88  (seen)
+        pablo_whatsapp_on?  [call]  bl/pablo.rb:134-136
+        pablo_chunks  [call]  bl/pablo.rb:175-182
+        pablo_whatsapp_text  [call]  bl/pablo.rb:170-172
+        Helpers#log_e  [call]  mw/error_handling.rb:6-16  (seen)
+        pablo_twilio_error  [call]  bl/pablo.rb:161-167
+        FlashMessage#message  [call]  mw/flash.rb:16-20  (seen)
+      pablo_deliver_email  [call]  bl/pablo.rb:184-191
+        pablo_user_address  [call]  bl/pablo.rb:81-88  (seen)
+        send_email  [call]  comm/emails.rb:21-52
+          Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+          Hash#compact  [call]  my_lib.rb:19-21  (seen)
+          Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+          Helpers#log_e  [call]  mw/error_handling.rb:6-16  (seen)
+        pablo_email_subject  [call]  bl/pablo.rb:194-197
+        pablo_email_html  [call]  bl/pablo.rb:200-233
+          CGI.escapeHTML  [model_call]    (leaf)
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+
+POST /pablo/inbound/whatsapp  ->  POST /pablo/inbound/whatsapp
+  POST /pablo/inbound/whatsapp  [handler]  bl/pablo.rb:275-283
+    pablo_twilio_request?  [call]  bl/pablo.rb:264-267
+    pablo_phone_digits  [call]  bl/pablo.rb:139-143
+    pablo_user_by_phone  [call]  bl/pablo.rb:256-262
+      pablo_phone_digits  [call]  bl/pablo.rb:139-143  (seen)
+      CGI.unescapeHTML  [model_call]    (leaf)
+    pablo_twiml  [call]  bl/pablo.rb:269-272
+      CGI.escapeHTML  [model_call]    (leaf)
+    pablo_receive  [call]  bl/pablo.rb:238-253
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126
+          cu  [call]  mw/middleware_incoming.rb:109-120
+            cu_session  [call]  mw/middleware_incoming.rb:104-107  (truncated)
+            cu_token  [call]  mw/middleware_incoming.rb:95-102  (truncated)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+          nice_id  [call]  my_lib.rb:75-80
+          Hash#hwia  [call]  my_lib.rb:15-17
+      ai_rate_limited?  [call]  bl/ai.rb:219-221
+        AI_RATE_WINDOW.ago  [model_call]    (leaf)
+      ai_open_agent_chat  [call]  bl/ai.rb:240-246
+        ai_find_agent_chat  [call]  bl/ai.rb:225-237
+          Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+            Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+      pablo_messages  [call]  bl/pablo.rb:116-119
+        ai_build_messages  [call]  bl/ai.rb:269-276
+          CGI.unescapeHTML  [model_call]    (leaf)
+          ai_chat_agent  [call]  bl/ai.rb:197-199
+            ai_agent  [call]  bl/ai.rb:192-195  (truncated)
+          paamonim_family_context  [call]  bl/paamonim.rb:164-173
+            PAAMONIM_FIELDS.keys  [model_call]    (leaf)
+          ai_chat_msgs  [call]  bl/ai.rb:207-209
+      pablo_deliver  [call]  bl/pablo.rb:125-132
+        pablo_deliver_whatsapp  [call]  bl/pablo.rb:145-159
+          pablo_phone_digits  [call]  bl/pablo.rb:139-143  (seen)
+          pablo_user_address  [call]  bl/pablo.rb:81-88
+            CGI.unescapeHTML  [model_call]    (leaf)
+          pablo_whatsapp_on?  [call]  bl/pablo.rb:134-136
+          pablo_chunks  [call]  bl/pablo.rb:175-182
+          pablo_whatsapp_text  [call]  bl/pablo.rb:170-172
+          Helpers#log_e  [call]  mw/error_handling.rb:6-16  (seen)
+          pablo_twilio_error  [call]  bl/pablo.rb:161-167
+          FlashMessage#message  [call]  mw/flash.rb:16-20
+        pablo_deliver_email  [call]  bl/pablo.rb:184-191
+          pablo_user_address  [call]  bl/pablo.rb:81-88  (seen)
+          send_email  [call]  comm/emails.rb:21-52
+            Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+            Hash#compact  [call]  my_lib.rb:19-21  (truncated)
+            Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+            Helpers#log_e  [call]  mw/error_handling.rb:6-16  (seen)
+          pablo_email_subject  [call]  bl/pablo.rb:194-197
+          pablo_email_html  [call]  bl/pablo.rb:200-233
+            CGI.escapeHTML  [model_call]    (leaf)
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+    pablo_user_address  [call]  bl/pablo.rb:81-88  (seen)
+
+POST /pablo/inbound/whatsapp_status  ->  POST /pablo/inbound/whatsapp_status
+  POST /pablo/inbound/whatsapp_status  [handler]  bl/pablo.rb:286-292
+    pablo_twilio_request?  [call]  bl/pablo.rb:264-267
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+    pablo_twilio_error  [call]  bl/pablo.rb:161-167
+
+POST /pablo/inbound/email  ->  POST /pablo/inbound/email
+  POST /pablo/inbound/email  [handler]  bl/pablo.rb:295-304
+    Rack::Utils.secure_compare  [model_call]    (leaf)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    pablo_receive  [call]  bl/pablo.rb:238-253
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126
+          cu  [call]  mw/middleware_incoming.rb:109-120
+            cu_session  [call]  mw/middleware_incoming.rb:104-107  (truncated)
+            cu_token  [call]  mw/middleware_incoming.rb:95-102  (truncated)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+          nice_id  [call]  my_lib.rb:75-80
+          Hash#hwia  [call]  my_lib.rb:15-17
+      ai_rate_limited?  [call]  bl/ai.rb:219-221
+        AI_RATE_WINDOW.ago  [model_call]    (leaf)
+      ai_open_agent_chat  [call]  bl/ai.rb:240-246
+        ai_find_agent_chat  [call]  bl/ai.rb:225-237
+          Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+            Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+      pablo_messages  [call]  bl/pablo.rb:116-119
+        ai_build_messages  [call]  bl/ai.rb:269-276
+          CGI.unescapeHTML  [model_call]    (leaf)
+          ai_chat_agent  [call]  bl/ai.rb:197-199
+            ai_agent  [call]  bl/ai.rb:192-195  (truncated)
+          paamonim_family_context  [call]  bl/paamonim.rb:164-173
+            PAAMONIM_FIELDS.keys  [model_call]    (leaf)
+          ai_chat_msgs  [call]  bl/ai.rb:207-209
+      pablo_deliver  [call]  bl/pablo.rb:125-132
+        pablo_deliver_whatsapp  [call]  bl/pablo.rb:145-159
+          pablo_phone_digits  [call]  bl/pablo.rb:139-143
+          pablo_user_address  [call]  bl/pablo.rb:81-88
+            CGI.unescapeHTML  [model_call]    (leaf)
+          pablo_whatsapp_on?  [call]  bl/pablo.rb:134-136
+          pablo_chunks  [call]  bl/pablo.rb:175-182
+          pablo_whatsapp_text  [call]  bl/pablo.rb:170-172
+          Helpers#log_e  [call]  mw/error_handling.rb:6-16  (seen)
+          pablo_twilio_error  [call]  bl/pablo.rb:161-167
+          FlashMessage#message  [call]  mw/flash.rb:16-20
+        pablo_deliver_email  [call]  bl/pablo.rb:184-191
+          pablo_user_address  [call]  bl/pablo.rb:81-88  (seen)
+          send_email  [call]  comm/emails.rb:21-52
+            Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+            Hash#compact  [call]  my_lib.rb:19-21  (truncated)
+            Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+            Helpers#log_e  [call]  mw/error_handling.rb:6-16  (seen)
+          pablo_email_subject  [call]  bl/pablo.rb:194-197
+          pablo_email_html  [call]  bl/pablo.rb:200-233
+            CGI.escapeHTML  [model_call]    (leaf)
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+
+GET /platform/submit_post  ->  GET /platform/submit_post
+  GET /platform/submit_post  [handler]  bl/platform.rb:4-8
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+
+POST /quick_contact  ->  POST /quick_contact
+  POST /quick_contact  [handler]  bl/quick_contact.rb:3-14
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    _req  [call]  mw/middleware_incoming.rb:136-138
+    location_by_ip  [call]  bl/cast_clicks.rb:6-9
+      Hash#hwia  [call]  my_lib.rb:15-17
+      http_get_json  [call]  comm/http.rb:24-27
+        http_get  [call]  comm/http.rb:5-9
+          Timeout.timeout  [model_call]    (leaf)
+          RestClient.get  [model_call]    (leaf)
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+    send_email  [call]  comm/emails.rb:21-52
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Hash#compact  [call]  my_lib.rb:19-21
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126
+          cu  [call]  mw/middleware_incoming.rb:109-120
+            cu_session  [call]  mw/middleware_incoming.rb:104-107  (truncated)
+            cu_token  [call]  mw/middleware_incoming.rb:95-102  (truncated)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138  (seen)
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+
+POST /reviews/new  ->  POST /reviews/new
+  POST /reviews/new  [handler]  bl/reviews.rb:46-59
+    Hash#just  [ambiguous]  my_lib.rb:2-8
+    Array#just  [ambiguous]  my_lib.rb:25-27
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35  (seen)
+
+POST /reviews/:id/delete  ->  POST /reviews/:id/delete
+  POST /reviews/:id/delete  [handler]  bl/reviews.rb:65-76
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    can_delete_review  [call]  bl/reviews.rb:34-40
+      cuid  [call]  mw/middleware_incoming.rb:123-126
+        cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+      is_admin  [call]  admin/admin.rb:184-191
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    flash  [call]  mw/flash.rb:24-26  (seen)
+
+GET /search/autocomplete  ->  GET /search/autocomplete
+  GET /search/autocomplete  [handler]  bl/search.rb:11-20
+    Mongo::Collection#all  [call]  db/mongo_extension.rb:20-22
+      Mongo::Collection#get_many  [call]  db/mongo_extension.rb:8-13
+    user_link  [call]  bl/users.rb:404-407
+
+POST /stripe_notif  ->  POST /stripe_notif
+  POST /stripe_notif  [handler]  bl/stripe.rb:13-26
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+    Helpers#log_e  [call]  mw/error_handling.rb:6-16
+      cuid  [call]  mw/middleware_incoming.rb:123-126
+        cu  [call]  mw/middleware_incoming.rb:109-120
+          cu_session  [call]  mw/middleware_incoming.rb:104-107
+            session  [call]  scheduler.rb:35-35  (truncated)
+          cu_token  [call]  mw/middleware_incoming.rb:95-102
+            request_header  [call]  mw/middleware_incoming.rb:86-88  (truncated)
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+      cu  [ambiguous]  scheduler.rb:36-36
+      request_path  [call]  mw/middleware_incoming.rb:128-130
+        _req  [call]  mw/middleware_incoming.rb:136-138
+      _params  [call]  mw/middleware_incoming.rb:140-142
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+
+POST /stripe/pay  ->  POST /stripe/pay
+  POST /stripe/pay  [handler]  bl/stripe.rb:28-71
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    is_series  [call]  bl/casts.rb:233-236
+      is_pro_cast  [call]  bl/casts.rb:361-363
+    cast_allows_variable_amount  [call]  bl/casts.rb:182-184
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+    is_test_buy  [call]  bl/casts.rb:131-140
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+      cu  [ambiguous]  scheduler.rb:36-36
+    Stripe::PaymentIntent.create  [model_call]    (leaf)
+    Stripe::PaymentIntent.confirm  [model_call]    (leaf)
+    FlashMessage#message  [call]  mw/flash.rb:16-20
+    enroll_user  [call]  bl/enrollment.rb:12-41
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      is_pro_cast  [call]  bl/casts.rb:361-363  (seen)
+      send_email  [call]  comm/emails.rb:21-52
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+        Hash#compact  [call]  my_lib.rb:19-21
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+        Helpers#log_e  [call]  mw/error_handling.rb:6-16
+          cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+          cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+          cu  [ambiguous]  scheduler.rb:36-36  (seen)
+          request_path  [call]  mw/middleware_incoming.rb:128-130
+            _req  [call]  mw/middleware_incoming.rb:136-138  (truncated)
+          _params  [call]  mw/middleware_incoming.rb:140-142
+          Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      send_enrollment_emails  [call]  bl/enrollment.rb:86-98
+        email_by_view  [call]  comm/emails.rb:110-112
+        send_email  [call]  comm/emails.rb:21-52  (seen)
+      add_user_as_customer  [call]  bl/enrollment.rb:43-48
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16  (seen)
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+    generate_response  [call]  bl/stripe.rb:73-83
+
+POST /stripe/subscribe  ->  POST /stripe/subscribe
+  POST /stripe/subscribe  [handler]  bl/stripe.rb:120-184
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+      cu_session  [call]  mw/middleware_incoming.rb:104-107
+        session  [call]  scheduler.rb:35-35
+      cu_token  [call]  mw/middleware_incoming.rb:95-102
+        request_header  [call]  mw/middleware_incoming.rb:86-88
+    cu  [ambiguous]  scheduler.rb:36-36
+    is_test_buy  [call]  bl/casts.rb:131-140
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+      cu  [ambiguous]  scheduler.rb:36-36  (seen)
+    Stripe::Customer.create  [model_call]    (leaf)
+    Hash#hwia  [call]  my_lib.rb:15-17
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+    cast_allows_variable_amount  [call]  bl/casts.rb:182-184
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+    Stripe::Subscription.create  [model_call]    (leaf)
+    enroll_user  [call]  bl/enrollment.rb:12-41
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      is_pro_cast  [call]  bl/casts.rb:361-363
+      send_email  [call]  comm/emails.rb:21-52
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+        Hash#compact  [call]  my_lib.rb:19-21
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+        Helpers#log_e  [call]  mw/error_handling.rb:6-16
+          cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+          cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+          cu  [ambiguous]  scheduler.rb:36-36  (seen)
+          request_path  [call]  mw/middleware_incoming.rb:128-130
+            _req  [call]  mw/middleware_incoming.rb:136-138  (truncated)
+          _params  [call]  mw/middleware_incoming.rb:140-142
+          Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      send_enrollment_emails  [call]  bl/enrollment.rb:86-98
+        email_by_view  [call]  comm/emails.rb:110-112
+        send_email  [call]  comm/emails.rb:21-52  (seen)
+      add_user_as_customer  [call]  bl/enrollment.rb:43-48
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16  (seen)
+
+GET /my_earnings  ->  GET /my_earnings
+  GET /my_earnings  [handler]  bl/stripe.rb:260-267
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    is_admin  [call]  admin/admin.rb:184-191
+    all_seller_earnings  [call]  bl/stripe.rb:252-258
+      stripe_charges_for_seller  [call]  bl/stripe.rb:216-249
+        Stripe::Charge.list  [model_call]    (leaf)
+      stripe_sub_earnings  [call]  bl/stripe.rb:191-213
+        Stripe::Subscription.list  [model_call]    (leaf)
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /support  ->  GET /support
+  GET /support  [handler]  bl/support.rb:14-20
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    ensure_user_support_cast_exists  [call]  bl/support.rb:9-12
+      user_support_cast_id  [call]  bl/support.rb:5-7
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+    cu  [ambiguous]  scheduler.rb:36-36  (seen)
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /support/:handle  ->  GET /support/:handle
+  GET /support/:handle  [handler]  bl/support.rb:22-28
+    require_admin  [call]  mw/halts.rb:44-49
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    user_support_cast_id  [call]  bl/support.rb:5-7
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /foo/:id  ->  GET /foo/:id
+  GET /foo/:id  [handler]  bl/test.rb:65-71
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+
+GET /users/:id/profile  ->  GET /users/:id/profile
+  GET /users/:id/profile  [handler]  bl/test.rb:73-75
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+
+GET /me  ->  GET /me
+  GET /me  [handler]  bl/users.rb:129-138
+    redirect_unless_user  [call]  mw/halts.rb:55-60
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /in/:handle  ->  GET /in/:handle
+  GET /in/:handle  [handler]  bl/users.rb:147-150
+    show_user_by_handle  [call]  bl/users.rb:140-145
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+      pr  [ambiguous]  scheduler.rb:34-34
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80
+        Hash#hwia  [call]  my_lib.rb:15-17
+      cuid  [call]  mw/middleware_incoming.rb:123-126
+        cu  [call]  mw/middleware_incoming.rb:109-120
+          cu_session  [call]  mw/middleware_incoming.rb:104-107
+            session  [call]  scheduler.rb:35-35  (truncated)
+          cu_token  [call]  mw/middleware_incoming.rb:95-102
+            request_header  [call]  mw/middleware_incoming.rb:86-88  (truncated)
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+      cu  [ambiguous]  scheduler.rb:36-36
+      default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /zen/:handle  ->  GET /zen/:handle
+  GET /zen/:handle  [handler]  bl/users.rb:152-155
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    show_user_by_handle  [call]  bl/users.rb:140-145
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93  (seen)
+      pr  [ambiguous]  scheduler.rb:34-34  (seen)
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80
+        Hash#hwia  [call]  my_lib.rb:15-17
+      cuid  [call]  mw/middleware_incoming.rb:123-126
+        cu  [call]  mw/middleware_incoming.rb:109-120
+          cu_session  [call]  mw/middleware_incoming.rb:104-107
+            session  [call]  scheduler.rb:35-35  (truncated)
+          cu_token  [call]  mw/middleware_incoming.rb:95-102
+            request_header  [call]  mw/middleware_incoming.rb:86-88  (truncated)
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+      cu  [ambiguous]  scheduler.rb:36-36
+      default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /u/:id  ->  GET /u/:id
+  GET /u/:id  [handler]  bl/users.rb:157-161
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /u/:id/login  ->  GET /u/:id/login
+  GET /u/:id/login  [handler]  bl/users.rb:163-168
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    session  [call]  scheduler.rb:35-35
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35  (seen)
+
+GET /me/analytics  ->  GET /me/analytics
+  GET /me/analytics  [handler]  bl/users.rb:175-179
+    redirect_unless_user  [call]  mw/halts.rb:55-60
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /create  ->  GET /create
+  GET /create  [handler]  bl/users.rb:181-186
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    redirect_unless_user  [call]  mw/halts.rb:55-60
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+POST /update_me  ->  POST /update_me
+  POST /update_me  [handler]  bl/users.rb:192-224
+    FACETS.mapo  [model_call]    (leaf)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    redirect_unless_user  [call]  mw/halts.rb:55-60
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    Hash#just_keys  [call]  my_lib.rb:10-13
+      Hash#hwia  [call]  my_lib.rb:15-17
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+    cu  [ambiguous]  scheduler.rb:36-36  (seen)
+    clean_user  [call]  bl/users.rb:251-257
+      Hash#just  [ambiguous]  my_lib.rb:2-8
+      Array#just  [ambiguous]  my_lib.rb:25-27
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126
+          cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36  (seen)
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+          nice_id  [call]  my_lib.rb:75-80
+          Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+    flash  [call]  mw/flash.rb:24-26  (seen)
+
+POST /signup  ->  POST /signup
+  POST /signup  [handler]  bl/users.rb:435-457
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    verify_signup_data  [call]  bl/users.rb:279-346
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93  (seen)
+      pr  [ambiguous]  scheduler.rb:34-34  (seen)
+      nice_id  [call]  my_lib.rb:75-80
+      Faker::Name.name  [model_call]    (leaf)
+      check_team_member_name  [call]  bl/users.rb:268-277
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35
+      flash_err  [call]  mw/middleware_outgoing.rb:1-4
+        session  [call]  scheduler.rb:35-35  (seen)
+        flash  [call]  mw/flash.rb:24-26  (seen)
+      looks_like_phone_number  [call]  bl/users.rb:264-266
+    add_user  [call]  bl/users.rb:348-402
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93  (seen)
+      pr  [ambiguous]  scheduler.rb:34-34  (seen)
+      Mongo::Collection#available_field  [call]  db/mongo_extension.rb:60-67
+        Mongo::Collection#exists?  [call]  db/mongo_extension.rb:32-34
+          Mongo::Collection#get_many  [call]  db/mongo_extension.rb:8-13
+        Mongo::Collection#available_field  [call]  db/mongo_extension.rb:60-67  (cycle)
+      BCrypt::Password.create  [model_call]    (leaf)
+      session  [call]  scheduler.rb:35-35  (seen)
+      _req  [call]  mw/middleware_incoming.rb:136-138
+      geocode  [call]  logging/requests_log.rb:21-23
+        Geocoder.search  [model_call]    (leaf)
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80  (seen)
+        Hash#hwia  [call]  my_lib.rb:15-17
+      flash  [call]  mw/flash.rb:24-26  (seen)
+    send_email  [call]  comm/emails.rb:21-52
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Hash#compact  [call]  my_lib.rb:19-21
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126
+          cu  [call]  mw/middleware_incoming.rb:109-120
+            cu_session  [call]  mw/middleware_incoming.rb:104-107  (truncated)
+            cu_token  [call]  mw/middleware_incoming.rb:95-102  (truncated)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138  (seen)
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+
+GET /enter  ->  GET /enter
+  GET /enter  [handler]  bl/users.rb:466-469
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /login  ->  GET /login
+  GET /login  [handler]  bl/users.rb:471-477
+    session  [call]  scheduler.rb:35-35
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+POST /login  ->  POST /login
+  POST /login  [handler]  bl/users.rb:487-500
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    is_right_password  [call]  bl/users.rb:479-485
+    session  [call]  scheduler.rb:35-35
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35  (seen)
+    CGI.unescapeHTML  [model_call]    (leaf)
+
+GET /fb_login  ->  GET /fb_login
+  GET /fb_login  [handler]  bl/users.rb:505-511
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    http_get_json  [call]  comm/http.rb:24-27
+      http_get  [call]  comm/http.rb:5-9
+        Timeout.timeout  [model_call]    (leaf)
+        RestClient.get  [model_call]    (leaf)
+
+GET /signup  ->  GET /signup
+  GET /signup  [handler]  bl/users.rb:517-524
+    session  [call]  scheduler.rb:35-35
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    default_layout  [call]  mw/view_helpers.rb:1-3
+
+GET /email_login  ->  GET /email_login
+  GET /email_login  [handler]  bl/users.rb:526-539
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    session  [call]  scheduler.rb:35-35
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35  (seen)
+
+POST /users/contact  ->  POST /users/contact
+  POST /users/contact  [handler]  bl/users.rb:541-558
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35
+    send_email  [call]  comm/emails.rb:21-52
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80
+        Hash#hwia  [call]  my_lib.rb:15-17
+      Hash#compact  [call]  my_lib.rb:19-21
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126
+          cu  [call]  mw/middleware_incoming.rb:109-120
+            cu_session  [call]  mw/middleware_incoming.rb:104-107  (truncated)
+            cu_token  [call]  mw/middleware_incoming.rb:95-102  (truncated)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+
+POST /beta_signup  ->  POST /beta_signup
+  POST /beta_signup  [handler]  bl/users.rb:560-564
+    send_email  [call]  comm/emails.rb:21-52
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80
+        Hash#hwia  [call]  my_lib.rb:15-17
+      Hash#compact  [call]  my_lib.rb:19-21
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126
+          cu  [call]  mw/middleware_incoming.rb:109-120
+            cu_session  [call]  mw/middleware_incoming.rb:104-107  (truncated)
+            cu_token  [call]  mw/middleware_incoming.rb:95-102  (truncated)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35
+
+POST /v3  ->  POST /v3
+  POST /v3  [handler]  bl/v3.rb:3-14
+    require_user  [call]  mw/halts.rb:37-42
+      cu  [ambiguous]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+      cu  [ambiguous]  scheduler.rb:36-36
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    Hash#just  [ambiguous]  my_lib.rb:2-8
+    Array#just  [ambiguous]  my_lib.rb:25-27
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+    cu  [ambiguous]  scheduler.rb:36-36  (seen)
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    _v3  [call]  bl/v3.rb:1-1
+      Mongo::Client#collection  [call]  db/mongo.rb:16-16
+      _mongo  [call]  db/mongo.rb:11-14
+    flash  [call]  mw/flash.rb:24-26  (seen)
+    send_email  [call]  comm/emails.rb:21-52
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Hash#compact  [call]  my_lib.rb:19-21
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126
+          cu  [call]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36  (seen)
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+
+POST /vouches/:user_id  ->  POST /vouches/:user_id
+  POST /vouches/:user_id  [handler]  bl/vouches.rb:5-20
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35  (seen)
+    send_email  [call]  comm/emails.rb:21-52
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      Hash#compact  [call]  my_lib.rb:19-21
+      Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+        Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+
+POST /wa_msg  ->  POST /wa_msg
+  POST /wa_msg  [handler]  bl/wa_msgs.rb:5-9
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+
+POST /emails/forgot_password  ->  POST /emails/forgot_password
+  POST /emails/forgot_password  [handler]  comm/emails.rb:75-93
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+    record_event  [call]  bl/anals.rb:13-27
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93  (seen)
+      pr  [ambiguous]  scheduler.rb:34-34  (seen)
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80
+        Hash#hwia  [call]  my_lib.rb:15-17
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126
+          cu  [call]  mw/middleware_incoming.rb:109-120
+            cu_session  [call]  mw/middleware_incoming.rb:104-107  (truncated)
+            cu_token  [call]  mw/middleware_incoming.rb:95-102  (truncated)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36
+        request_path  [call]  mw/middleware_incoming.rb:128-130
+          _req  [call]  mw/middleware_incoming.rb:136-138
+        _params  [call]  mw/middleware_incoming.rb:140-142
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+    send_login_email  [call]  comm/emails.rb:95-105
+      update_user_token  [call]  comm/emails.rb:61-65
+        guid  [call]  my_lib.rb:60-62
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+          Hash#hwia  [call]  my_lib.rb:15-17  (seen)
+      send_email  [call]  comm/emails.rb:21-52
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+        Hash#compact  [call]  my_lib.rb:19-21
+        Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92  (seen)
+        Helpers#log_e  [call]  mw/error_handling.rb:6-16  (seen)
+    guid  [call]  my_lib.rb:60-62  (seen)
+    add_user  [call]  bl/users.rb:348-402
+      pr  [ambiguous]  mw/middleware_incoming.rb:90-93  (seen)
+      pr  [ambiguous]  scheduler.rb:34-34  (seen)
+      Mongo::Collection#available_field  [call]  db/mongo_extension.rb:60-67
+        Mongo::Collection#exists?  [call]  db/mongo_extension.rb:32-34
+          Mongo::Collection#get_many  [call]  db/mongo_extension.rb:8-13
+        Mongo::Collection#available_field  [call]  db/mongo_extension.rb:60-67  (cycle)
+      BCrypt::Password.create  [model_call]    (leaf)
+      session  [call]  scheduler.rb:35-35
+      _req  [call]  mw/middleware_incoming.rb:136-138  (seen)
+      geocode  [call]  logging/requests_log.rb:21-23
+        Geocoder.search  [model_call]    (leaf)
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+      flash  [call]  mw/flash.rb:24-26
+        FlashMessage#initialize  [call]  mw/flash.rb:8-10
+        session  [call]  scheduler.rb:35-35  (seen)
+    session  [call]  scheduler.rb:35-35  (seen)
+    flash  [call]  mw/flash.rb:24-26  (seen)
+
+GET /emails/:view  ->  GET /emails/:view
+  GET /emails/:view  [handler]  comm/emails.rb:139-141
+    email_by_view  [call]  comm/emails.rb:110-112
+    pr  [ambiguous]  mw/middleware_incoming.rb:90-93
+    pr  [ambiguous]  scheduler.rb:34-34
+
+GET /admin/pull_gdoc  ->  GET /admin/pull_gdoc
+  GET /admin/pull_gdoc  [handler]  comm/gdocs.rb:18-26
+    require_fields  [call]  mw/halts.rb:29-31
+      halt_missing_param  [call]  mw/halts.rb:17-19
+    gdoc_to_rows_arr  [call]  comm/gdocs.rb:28-35
+    Mongo::Client#collection  [call]  db/mongo.rb:16-16
+    Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+      nice_id  [call]  my_lib.rb:75-80
+      Hash#hwia  [call]  my_lib.rb:15-17
+    flash  [call]  mw/flash.rb:24-26
+      FlashMessage#initialize  [call]  mw/flash.rb:8-10
+      session  [call]  scheduler.rb:35-35
+
+GET /redis/set  ->  GET /redis/set
+  GET /redis/set  [handler]  db/redis.rb:12-15
+
+GET /redis/get  ->  GET /redis/get
+  GET /redis/get  [handler]  db/redis.rb:17-19
+
+GET /log_event  ->  GET /log_event
+  GET /log_event  [handler]  logging/site_log.rb:14-16
+    log_event  [call]  logging/site_log.rb:3-12
+      Hash#just  [ambiguous]  my_lib.rb:2-8
+      Array#just  [ambiguous]  my_lib.rb:25-27
+      Hash#compact  [call]  my_lib.rb:19-21
+      cuid  [call]  mw/middleware_incoming.rb:123-126
+        cu  [call]  mw/middleware_incoming.rb:109-120
+          cu_session  [call]  mw/middleware_incoming.rb:104-107
+            session  [call]  scheduler.rb:35-35  (truncated)
+          cu_token  [call]  mw/middleware_incoming.rb:95-102
+            request_header  [call]  mw/middleware_incoming.rb:86-88  (truncated)
+      request_path  [call]  mw/middleware_incoming.rb:128-130
+        _req  [call]  mw/middleware_incoming.rb:136-138
+      _params  [call]  mw/middleware_incoming.rb:140-142
+      Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78
+        nice_id  [call]  my_lib.rb:75-80
+        Hash#hwia  [call]  my_lib.rb:15-17
+      Helpers#log_e  [call]  mw/error_handling.rb:6-16
+        cuid  [call]  mw/middleware_incoming.rb:123-126  (seen)
+        cu  [ambiguous]  mw/middleware_incoming.rb:109-120  (seen)
+        cu  [ambiguous]  scheduler.rb:36-36
+        request_path  [call]  mw/middleware_incoming.rb:128-130  (seen)
+        _params  [call]  mw/middleware_incoming.rb:140-142  (seen)
+        Mongo::Collection#add  [call]  db/mongo_extension.rb:70-78  (seen)
+
+GET /headers  ->  GET /headers
+  before_filter  [before_filter]  mw/middleware_incoming.rb:64-76
+    session  [call]  scheduler.rb:35-35
+    pr  [call]  mw/middleware_incoming.rb:90-93
+    store_external_ref  [call]  mw/middleware_incoming.rb:57-62
+      request_header  [call]  mw/middleware_incoming.rb:86-88
+      session  [call]  scheduler.rb:35-35  (seen)
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35  (seen)
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88  (seen)
+  GET /headers  [handler]  mw/middleware_incoming.rb:78-80
+    req_headers  [call]  mw/middleware_incoming.rb:82-84
+
+GET /country  ->  GET /country
+  before_filter  [before_filter]  mw/middleware_incoming.rb:64-76
+    session  [call]  scheduler.rb:35-35
+    pr  [call]  mw/middleware_incoming.rb:90-93
+    store_external_ref  [call]  mw/middleware_incoming.rb:57-62
+      request_header  [call]  mw/middleware_incoming.rb:86-88
+      session  [call]  scheduler.rb:35-35  (seen)
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35  (seen)
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88  (seen)
+  GET /country  [handler]  mw/middleware_incoming.rb:186-188
+    session  [call]  scheduler.rb:35-35  (seen)
+
+GET /mw/middleware_incoming  ->  GET /mw/middleware_incoming
+  before_filter  [before_filter]  mw/middleware_incoming.rb:64-76
+    session  [call]  scheduler.rb:35-35
+    pr  [call]  mw/middleware_incoming.rb:90-93
+    store_external_ref  [call]  mw/middleware_incoming.rb:57-62
+      request_header  [call]  mw/middleware_incoming.rb:86-88
+      session  [call]  scheduler.rb:35-35  (seen)
+    Mongo::Collection#update_id  [call]  db/mongo_extension.rb:85-92
+      Hash#hwia  [call]  my_lib.rb:15-17
+    cuid  [call]  mw/middleware_incoming.rb:123-126
+      cu  [call]  mw/middleware_incoming.rb:109-120
+        cu_session  [call]  mw/middleware_incoming.rb:104-107
+          session  [call]  scheduler.rb:35-35  (seen)
+        cu_token  [call]  mw/middleware_incoming.rb:95-102
+          request_header  [call]  mw/middleware_incoming.rb:86-88  (seen)
+  GET /mw/middleware_incoming  [handler]  mw/middleware_incoming.rb:215-215
