@@ -448,13 +448,65 @@ JS_INDEXER = <<~'JS'
   const NEST = { Get: 'GET', Post: 'POST', Put: 'PUT', Patch: 'PATCH', Delete: 'DELETE', All: 'ANY' };
   // Receivers that are HTTP *clients* or maps, not servers: axios.get('/x'), cache.get(...)
   const NOT_SERVER = /axios|http|fetch|client|api|request|\$|cache|map|params|headers|storage|query/i;
+  // Calls that wrap a route handler rather than being middleware: asyncHandler(fn), catchErrors(ctrl.show)
+  const WRAPPER = /async|wrap|catch|handler|controller/i;
   const res = { defs: [], classes: {}, routes: [], filters: [] };
+  const P = require('path').posix;
+  const joinPath = (...p) => '/' + p.filter(Boolean).map(s => s.replace(/^\/+|\/+$/g, '')).filter(Boolean).join('/');
+  // For mounted-router prefixes: app.use('/api', x) calls, and each file's local require/import names.
+  const mounts = [];      // { file, prefix, spec } (require('./x') inline) or { file, prefix, name }
+  const requires = {};    // file -> { localName: resolved file }
+  let relSet = new Set();
 
   let input = '';
   process.stdin.on('data', d => input += d).on('end', () => {
-    for (const [path, rel] of JSON.parse(input)) indexFile(path, rel);
+    const files = JSON.parse(input);
+    relSet = new Set(files.map(f => f[1]));
+    for (const [path, rel] of files) indexFile(path, rel);
+    applyMountPrefixes();
     process.stdout.write(JSON.stringify(res));
   });
+
+  // './routes/users' required from 'src/server.js' -> 'src/routes/users.js' (only files we indexed)
+  function resolveModule(fromRel, spec) {
+    if (!spec || !spec.startsWith('.')) return null;
+    const base = P.normalize(P.join(P.dirname(fromRel), spec));
+    const exts = ['.js', '.ts', '.jsx', '.tsx', '.mjs', '.cjs'];
+    return [base, ...exts.map(x => base + x), ...exts.map(x => `${base}/index${x}`)].find(c => relSet.has(c)) || null;
+  }
+
+  // Prefix each Express route's path with where its router is mounted. A file's prefix comes from
+  //   1. an explicit mount of it:   app.use('/api', require('./routes'))   or   app.use('/api', routes(router))
+  //   2. otherwise, the longest prefix of a file that requires it (routes/index.js requiring routes/users.js)
+  // plus, within one file, mounts of a local router variable:  r.get('/x'); app.use('/v1', r)
+  function applyMountPrefixes() {
+    const explicit = {}, implicit = {}, local = [];
+    for (const m of mounts) {
+      const mod = m.spec ? resolveModule(m.file, m.spec) : (requires[m.file] || {})[m.name];
+      if (mod) (explicit[mod] ||= []).push(m);
+      else if (m.name) local.push(m);
+    }
+    for (const [file, names] of Object.entries(requires))
+      for (const mod of new Set(Object.values(names))) (implicit[mod] ||= []).push(file);
+    const memo = {}, visiting = new Set();
+    const prefixOf = f => {
+      if (f in memo) return memo[f];
+      if (visiting.has(f)) return '';
+      visiting.add(f);
+      let p = '';
+      if (explicit[f]) p = joinPath(prefixOf(explicit[f][0].file), explicit[f][0].prefix);
+      else for (const src of implicit[f] || []) { const q = prefixOf(src); if (q.length > p.length) p = q; }
+      visiting.delete(f);
+      return (memo[f] = p === '/' ? '' : p);
+    };
+    for (const r of res.routes) {
+      if (r.framework !== 'express') continue;
+      let p = prefixOf(r.file);
+      const m = local.find(m => m.file === r.file && m.name === r.recv);
+      if (m) p = joinPath(p, m.prefix);
+      if (p && p !== '/') { r.path = joinPath(p, r.path); r.mount_prefix = p; }
+    }
+  }
 
   function indexFile(path, rel) {
     let src; try { src = fs.readFileSync(path, 'utf8'); } catch { return; }
@@ -495,48 +547,99 @@ JS_INDEXER = <<~'JS'
       })(body);
       return out;
     }
-    // A middleware/handler argument -> {def_id} (inline fn) or {name, recv} (a reference)
+    // A middleware/handler argument -> {def_id} (inline fn) or {name, recv} (a reference), plus
+    // `module` when the name came from require/import of an app file (const ctrl = require('../controllers/notes'))
     function ref(a, synth) {
       if (isFn(a)) return { def_id: addDef(synth, null, a, a.body) };
-      if (ts.isIdentifier(a)) return { name: a.text };
+      const module = (requires[rel] || {})[baseIdent(a)];
+      if (ts.isIdentifier(a)) return { name: a.text, ...(module && { module }) };
       if (ts.isPropertyAccessExpression(a)) {             // ctrl.show / UserController.show
         const r = recvOf(a.expression);
-        return { name: a.name.text, recv: r === 'expr' || r === 'self' ? null : r };
+        return { name: a.name.text, recv: r === 'expr' || r === 'self' ? null : r, ...(module && { module }) };
       }
       if (ts.isCallExpression(a)) {                       // asyncHandler(fn) / auth('admin') / h.bind(x)
         const inner = a.arguments.find(isFn);
         if (inner) return { def_id: addDef(synth, null, inner, inner.body) };
         if (ts.isPropertyAccessExpression(a.expression) && a.expression.name.text === 'bind') return ref(a.expression.expression, synth);
+        const wrapped = a.arguments.find(x => ts.isIdentifier(x) || ts.isPropertyAccessExpression(x));
+        if (wrapped && WRAPPER.test(a.expression.getText(sf))) return ref(wrapped, synth);   // asyncHandler(ctrl.show)
         const [nm, rv] = callOf(a.expression);
         if (nm) return { name: nm, recv: isConst(rv) ? rv : null };
       }
       return null;
     }
-    // Express / Koa-router / Fastify:  app.get('/x', mw1, mw2, handler)   and   app.use(mw)
+    // require('./x'), require('./x').y, require('./x')(opts) -> './x'
+    function requireSpec(n) {
+      while (n && (ts.isPropertyAccessExpression(n) || ts.isCallExpression(n))) {
+        if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'require') return str(n.arguments[0]);
+        n = n.expression;
+      }
+      return null;
+    }
+    // Leftmost identifier: router.route('/x').get -> router;  routes(router) -> routes
+    function baseIdent(n) {
+      while (n && (ts.isPropertyAccessExpression(n) || ts.isCallExpression(n))) n = n.expression;
+      return n && ts.isIdentifier(n) ? n.text : null;
+    }
+    // Remember local names bound to app files: const x = require('./x'), const { a } = require(...), import x from './x'
+    function noteRequire(names, spec) {
+      const mod = resolveModule(rel, spec);
+      if (mod) for (const nm of names) (requires[rel] ||= {})[nm] = mod;
+    }
+    // router.route('/x').get(...).put(...): the path of the .route() call at the bottom of the chain
+    function chainPath(n) {
+      while (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression)) {
+        const nm = n.expression.name.text;
+        if (nm === 'route') return str(n.arguments[0]);
+        if (!VERBS.has(nm)) return null;
+        n = n.expression.expression;
+      }
+      return null;
+    }
+    // The handler is the last function-like argument; arguments before it are middleware. Arguments
+    // after it (e.g. a trailing guard.check([...])) only run if the handler calls next(), so they
+    // don't protect it and are dropped. If nothing looks like a handler, the last argument is used.
+    function splitHandler(list) {
+      const flat = list.flatMap(a => ts.isArrayLiteralExpression(a) ? [...a.elements] : [a]);
+      const handlerLike = a => isFn(a) || ts.isIdentifier(a) || ts.isPropertyAccessExpression(a)
+        || (ts.isCallExpression(a) && (a.arguments.some(isFn) || WRAPPER.test(a.expression.getText(sf))));
+      let hi = flat.length - 1;
+      while (hi > 0 && !handlerLike(flat[hi])) hi--;
+      return [flat.slice(0, hi), flat[hi]];
+    }
+    // Express / Koa-router / Fastify:  app.get('/x', mw1, mw2, handler),  router.route('/x').get(mw, handler),
+    // app.use(mw)  and  app.use('/prefix', router)
     function routeCall(n) {
       const e = n.expression;
-      if (!ts.isPropertyAccessExpression(e) || NOT_SERVER.test(e.expression.getText(sf))) return;
+      if (!ts.isPropertyAccessExpression(e)) return;
       const verb = e.name.text, args = [...n.arguments];
+      const chained = VERBS.has(verb) && !str(args[0]) ? chainPath(e.expression) : null;
+      if (!chained && NOT_SERVER.test(e.expression.getText(sf))) return;
       if (verb === 'use' && args.length && !str(args[0])) {           // global middleware in this file
         for (const a of args) { const r = ref(a, 'middleware'); if (r) res.filters.push({ scope_file: rel, ...r }); }
         return;
       }
-      const path = str(args[0]);
-      if (!VERBS.has(verb) || args.length < 2 || !path || !path.startsWith('/')) return;
+      if (verb === 'use' && args.length >= 2 && str(args[0]).startsWith('/')) {   // mounted router
+        const target = args[args.length - 1], spec = requireSpec(target);
+        mounts.push({ file: rel, prefix: str(args[0]), ...(spec ? { spec } : { name: baseIdent(target) }) });
+        return;
+      }
+      const path = chained || str(args[0]);
+      const rest = chained ? args : args.slice(1);
+      if (!VERBS.has(verb) || !rest.length || !path || !path.startsWith('/')) return;
       const v = verb === 'all' ? 'ANY' : verb.toUpperCase();
-      const mws = args.slice(1, -1).flatMap(a => ts.isArrayLiteralExpression(a) ? [...a.elements] : [a]);
-      const h = ref(args[args.length - 1], `${v} ${path}`);
+      const [mws, last] = splitHandler(rest);
+      const h = ref(last, `${v} ${path}`);
       if (!h) return;
-      res.routes.push({ verb: v, path, framework: 'express', file: rel,
+      res.routes.push({ verb: v, path, framework: 'express', file: rel, recv: baseIdent(e.expression),
                         middleware: mws.map(a => ref(a, 'middleware')).filter(Boolean),
-                        ...(h.def_id ? { handler_id: h.def_id } : { handler_name: h.name, handler_recv: h.recv }) });
+                        ...(h.def_id ? { handler_id: h.def_id } : { handler_name: h.name, handler_recv: h.recv, handler_module: h.module }) });
     }
     // NestJS @UseGuards(AuthGuard, new RolesGuard()) -> calls to Guard#canActivate
     const guards = d => decName(d) !== 'UseGuards' ? [] : decArgs(d).map(a =>
       ts.isIdentifier(a) ? { name: 'canActivate', recv: a.text }
       : ts.isNewExpression(a) && ts.isIdentifier(a.expression) ? { name: 'canActivate', recv: a.expression.text }
       : ts.isCallExpression(a) ? { name: a.expression.getText(sf) } : null).filter(Boolean);
-    const joinPath = (...p) => '/' + p.filter(Boolean).map(s => s.replace(/^\/+|\/+$/g, '')).filter(Boolean).join('/');
 
     function visitClass(n, owner) {
       const name = n.name ? n.name.text : 'AnonymousClass';
@@ -561,6 +664,16 @@ JS_INDEXER = <<~'JS'
     }
 
     function visit(n, owner) {
+      if (ts.isVariableDeclaration(n) && n.initializer && requireSpec(n.initializer)) {
+        const names = ts.isIdentifier(n.name) ? [n.name.text]
+          : ts.isObjectBindingPattern(n.name) ? n.name.elements.map(el => el.name.getText(sf)) : [];
+        noteRequire(names, requireSpec(n.initializer));
+      } else if (ts.isImportDeclaration(n) && n.importClause && str(n.moduleSpecifier)) {
+        const c = n.importClause, b = c.namedBindings;
+        noteRequire([c.name && c.name.text, ...(b && ts.isNamespaceImport(b) ? [b.name.text] : []),
+                     ...(b && ts.isNamedImports(b) ? b.elements.map(el => el.name.text) : [])].filter(Boolean),
+                    str(n.moduleSpecifier));
+      }
       if (ts.isClassDeclaration(n) || ts.isClassExpression(n)) return visitClass(n, owner);
       if (ts.isFunctionDeclaration(n) && n.name && n.body) addDef(n.name.text, owner, n, n.body);
       else if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && isFn(n.initializer))
@@ -676,7 +789,7 @@ class Tracer
       [handler, filter_defs]
     else
       handler = route["handler_id"] ? @store.def_by_id(route["handler_id"])
-                                    : resolve_ref({ "name" => route["handler_name"], "recv" => route["handler_recv"] }, route["file"])
+                                    : resolve_ref({ "name" => route["handler_name"], "recv" => route["handler_recv"], "module" => route["handler_module"] }, route["file"])
       file = route["file"] || handler&.dig("file")
       # file-wide filters (Sinatra `before`, Flask before_request, app.use(mw)): skip unknown libs like cors()
       file_wide = @filters.select { |f| f["scope_file"] && f["scope_file"] == file }.filter_map { |f| resolve_ref(f, file) }
@@ -693,6 +806,9 @@ class Tracer
     return @store.def_by_id(ref["def_id"]) if ref["def_id"]
     return nil unless ref["name"]
     cands = defs_in(ref["name"], lang_of(near_file))
+    # JS: the name was required/imported from a known file -> take the definition there
+    hit = ref["module"] && cands.find { |d| d["file"] == ref["module"] }
+    return hit if hit
     cands = cands.select { |d| same_class?(d["owner"], ref["recv"]) } if ref["recv"]
     cands.find { |d| d["file"] == near_file } || cands.find { |d| d["owner"].nil? } || cands.first
   end

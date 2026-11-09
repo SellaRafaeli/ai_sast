@@ -1,0 +1,52 @@
+# What the BOLA detector should find in each test repo. Used by test_repos/run_tests.rb.
+#
+#   name:        case name (also the results/ folder name)
+#   repo:        path relative to test_repos/
+#   vulnerable:  routes with a known BOLA; each must be flagged (verdict likely or possible)
+#   safe:        routes that check ownership; each must NOT be flagged
+#
+# Routes are "VERB /path". Param syntax doesn't matter ({id}, :id and <id> all match).
+# Mounted-router prefixes are optional: "GET /api/v2/notes/:id" also matches a traced "GET /v2/notes/:id".
+# Routes in neither list are reported for information but don't affect pass/fail.
+
+- name: aegra-v0.9.6
+  repo: aegra-v0.9.6
+  source: CVE-2026-44504 / GHSA-m98r-6667-4wq7
+  vulnerable:
+    - POST /threads/{thread_id}/runs
+    - POST /threads/{thread_id}/runs/stream
+    - POST /threads/{thread_id}/runs/wait
+  # Unlabeled on purpose: the scanner flags these, and they may be real bugs that the CVE doesn't cover.
+  #   POST /runs, /runs/stream, /runs/wait: not affected by the CVE (the server picks the thread_id),
+  #     but services/run_preparation.py:201 loads the assistant by assistant_id with no user filter,
+  #     while the assistant endpoints only show the caller's own or "system" assistants.
+  #   POST /threads/{thread_id}/state: the path thread is ownership-checked, but api/threads.py:469
+  #     merges the body's `checkpoint` dict into the config, so the body may override thread_id.
+  safe:
+    # thread routes that filter by ThreadORM.user_id == user.identity (api/threads.py)
+    - GET /threads/{thread_id}
+    - PATCH /threads/{thread_id}
+    - DELETE /threads/{thread_id}
+    - GET /threads/{thread_id}/state
+    - GET /threads/{thread_id}/state/{checkpoint_id}
+    - POST /threads/{thread_id}/history
+    # run routes that filter by RunORM.user_id == user.identity (api/runs.py)
+    - GET /threads/{thread_id}/runs/{run_id}
+    - PATCH /threads/{thread_id}/runs/{run_id}
+    - DELETE /threads/{thread_id}/runs/{run_id}
+    - GET /threads/{thread_id}/runs/{run_id}/join
+    - GET /threads/{thread_id}/runs/{run_id}/stream
+    - POST /threads/{thread_id}/runs/{run_id}/cancel
+
+- name: dvws-node
+  repo: node/dvws-node
+  source: CHALLENGES.md #15, #19, #33, #39, #53
+  vulnerable:
+    - GET /api/v2/notes/:noteId                # 15 IDOR
+    - PUT /api/v2/notes/:noteId                # 15 IDOR
+    - DELETE /api/v2/notes/:noteId             # 15 IDOR
+    - GET /api/v2/passphrase/:username         # 19 horizontal access control
+    - POST /api/v2/account-recovery/reset      # 39 account recovery IDOR chain
+    - GET /api/v2/support/tickets/:id          # 53 support ticket IDOR
+    - POST /graphql                            # 33 GraphQL note resolvers
+  safe: []

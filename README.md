@@ -143,13 +143,13 @@ analyze_bola.rb
 | Sinatra | `get '/x' do ... end` | `before do ... end` in the same file |
 | Flask / FastAPI | `@app.route(..., methods=)`, `@app.get(...)`, `@router.post(...)` | `@app.before_request` (same file), decorators like `@login_required`, `Depends(...)` |
 | Django | `urls.py`: `path(...)` / `re_path(...)` to function views and `View.as_view()` (one route per defined `get`/`post`/...) | none |
-| Express / Koa-router / Fastify | `app.get('/x', mw..., handler)`: inline, referenced (`ctrl.show`), wrapped (`asyncHandler(fn)`) and arrays of middleware | per-route middleware, `app.use(mw)` in the same file |
+| Express / Koa-router / Fastify | `app.get('/x', mw..., handler)` and `router.route('/x').get(...).put(...)`: inline, referenced (`ctrl.show`), wrapped (`asyncHandler(fn)`) and arrays of middleware. Mount prefixes (`app.use('/api', router)`) are added, including routers loaded through other files (`app.use('/api', routes(router))` where `routes/index.js` calls each route file). A handler named through `require`/`import` resolves to that file. | per-route middleware before the handler, `app.use(mw)` in the same file |
 | NestJS | `@Controller('prefix')` + `@Get/@Post/...(':id')` | `@UseGuards(...)` on the class and the method, traced into `canActivate` |
 
 ## Known limits
 
-- **Prefixes:** mounted routers and blueprints (`app.use('/api', router)`, `register_blueprint(url_prefix=)`, Django `include()`) aren't followed, so their paths lack the prefix.
-- **Routing styles not found:** file-based routing (Next.js API routes), `router.route('/x').get(...)` chains, and Fastify `fastify.route({...})`.
+- **Prefixes:** Python blueprints and includes (`register_blueprint(url_prefix=)`, Django `include()`) aren't followed, so their paths lack the prefix. Express mounts are followed, but middleware given to the mount (`app.use('/api', auth, router)`) isn't added to the routes' filters, and a router mounted at two prefixes only gets the first.
+- **Routing styles not found:** file-based routing (Next.js API routes), Fastify `fastify.route({...})`, and GraphQL resolvers (`apolloServer.applyMiddleware`, `graphqlHTTP`): only the HTTP route is seen, not the resolvers behind it.
 - **Dynamic dispatch:** `send`, `getattr`, `method_missing` and dynamically defined methods aren't followed.
 - **Injected objects:** calls through them, like `this.repo.save` or `prisma.user.findUnique`, resolve by name only. They may land on an unrelated same-named function, or be missed as data access.
 - **Skipped directories:** `frontend/`, `client/`, `public/`, `static/`, `assets/`, test folders, `node_modules/` and `vendor/` aren't indexed (see `SKIP_DIRS`).

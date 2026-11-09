@@ -1,0 +1,8 @@
+{
+  "name": "ai-sast",
+  "private": true,
+  "description": "route_tracer.rb uses the TypeScript 5 compiler API to parse JS/TS (TypeScript 7 dropped that API)",
+  "dependencies": {
+    "typescript": "5.9.3"
+  }
+}
