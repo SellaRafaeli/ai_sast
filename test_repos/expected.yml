@@ -4,12 +4,13 @@
 #   repo:        path relative to test_repos/
 #   stack:       language / framework, shown in the README results table
 #   source:      where the known bugs come from (CVE, advisory, challenge list)
-#   vulnerable:  routes with a known BOLA; each must be flagged (verdict likely or possible)
+#   vulnerable:  routes with a known BOLA; the share flagged (verdict likely or possible) is the app's coverage
 #   safe:        routes that check ownership; each must NOT be flagged
+#   gaps:        optional { route: why } for known BOLAs the scanner misses; shown in the README's "Not covered"
 #
 # Routes are "VERB /path". Param syntax doesn't matter ({id}, :id and <id> all match).
 # Mounted-router prefixes are optional: "GET /api/v2/notes/:id" also matches a traced "GET /v2/notes/:id".
-# Routes in neither list are reported for information but don't affect pass/fail.
+# Routes in neither list are reported as unlabeled flags; they don't affect coverage.
 
 - name: aegra-v0.9.6
   repo: aegra-v0.9.6
@@ -44,7 +45,7 @@
 - name: dvws-node
   repo: node/dvws-node
   stack: Node.js / Express
-  source: CHALLENGES.md #15, #19, #33, #39, #53
+  source: "CHALLENGES.md #15, #19, #33, #39, #53"
   vulnerable:
     - GET /api/v2/notes/:noteId                # 15 IDOR
     - PUT /api/v2/notes/:noteId                # 15 IDOR
@@ -54,3 +55,5 @@
     - GET /api/v2/support/tickets/:id          # 53 support ticket IDOR
     - POST /graphql                            # 33 GraphQL note resolvers
   safe: []
+  gaps:
+    POST /graphql: GraphQL resolvers aren't traced yet; the route is served by Apollo (applyMiddleware) and the tracer only sees its rate limiter

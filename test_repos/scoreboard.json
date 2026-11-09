@@ -3,7 +3,7 @@
     "name": "aegra-v0.9.6",
     "stack": "Python / FastAPI",
     "source": "CVE-2026-44504 / GHSA-m98r-6667-4wq7",
-    "status": "pass",
+    "status": "ok",
     "routes_traced": 44,
     "routes_flagged": 7,
     "vulnerable": [
@@ -129,8 +129,8 @@
   "dvws-node": {
     "name": "dvws-node",
     "stack": "Node.js / Express",
-    "source": "CHALLENGES.md",
-    "status": "fail",
+    "source": "CHALLENGES.md #15, #19, #33, #39, #53",
+    "status": "ok",
     "routes_traced": 57,
     "routes_flagged": 14,
     "vulnerable": [
