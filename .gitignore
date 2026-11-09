@@ -8,3 +8,6 @@ secret_config.rb
 .env
 logs/*
 dump*
+# cloned test apps (re-create with test_repos/fetch.sh)
+test_repos/aegra-v0.9.6/
+test_repos/node/dvws-node/
