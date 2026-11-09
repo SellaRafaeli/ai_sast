@@ -26,6 +26,7 @@ require "set"
 require "net/http"
 
 MAX_FANOUT = 3 # follow at most this many same-named candidates for one call
+MAX_SOURCE_LINES = 300 # --with-source: cap per method
 SKIP_DIRS  = %w[.git node_modules vendor venv .venv env tmp log spec test tests
                 __pycache__ site-packages dist build coverage].freeze
 VERBS      = %w[get post put patch delete].freeze
@@ -405,9 +406,19 @@ end
 # ─────────────────────────── 3. TRACE ───────────────────────────
 
 class Tracer
-  def initialize(store, classes, filters, repo, depth)
+  def initialize(store, classes, filters, repo, depth, with_source: false)
     @store, @classes, @filters, @repo, @depth = store, classes, filters, repo, depth
+    @with_source = with_source
     @llm_cache = {}
+    @file_lines = {}
+  end
+
+  # The code of one def, read from the repo (capped so one huge method can't blow up the doc).
+  def source_of(d)
+    lines = @file_lines[d["file"]] ||= File.readlines(File.join(@repo, d["file"]))
+    body = lines[(d["start"] - 1)...d["end"]] || []
+    body = body.first(MAX_SOURCE_LINES) + ["# ... (#{body.size - MAX_SOURCE_LINES} more lines truncated)\n"] if body.size > MAX_SOURCE_LINES
+    { "id" => d["id"], "label" => label(d), "file" => d["file"], "lines" => "#{d['start']}-#{d['end']}", "code" => body.join }
   end
 
   # ── class hierarchy helpers ──
@@ -542,9 +553,12 @@ class Tracer
     @unresolved = []
     roots = filter_defs.map { |f| node(f, "before_filter", 1, []) }
     roots << (handler ? node(handler, "handler", 1, []) : { "label" => "(handler not found)", "via" => "handler" })
-    { "route" => "#{route['verb']} #{route['path']}", "framework" => route["framework"],
-      "handler" => handler && label(handler), "files" => @files.to_a.sort, "methods" => @seen.to_a,
-      "unresolved" => @unresolved.uniq, "tree" => roots }
+    result = { "route" => "#{route['verb']} #{route['path']}", "framework" => route["framework"],
+               "handler" => handler && label(handler), "files" => @files.to_a.sort, "methods" => @seen.to_a,
+               "unresolved" => @unresolved.uniq, "tree" => roots }
+    # --with-source: the body of every method reached, in the order it was first visited
+    result["sources"] = @seen.map { |id| source_of(@store.def_by_id(id)) } if @with_source
+    result
   end
 
   def label(d) = [d["owner"], d["name"]].compact.join(d["owner"]&.match?(/\A[A-Z]/) && !d["leaf"] ? "#" : ".")
@@ -584,12 +598,13 @@ end
 # ─────────────────────────── main ───────────────────────────
 
 if $PROGRAM_NAME == __FILE__
-  opts = { out: "trace.json", depth: 6, route: nil }
+  opts = { out: "trace.json", depth: 6, route: nil, source: false }
   OptionParser.new do |o|
     o.banner = "usage: ruby route_tracer.rb REPO [options]"
     o.on("--out FILE", "output JSON (a .txt tree is written next to it)") { |v| opts[:out] = v }
     o.on("--depth N", Integer, "max call depth (default 6)") { |v| opts[:depth] = v }
     o.on("--route TEXT", "only trace routes whose 'VERB /path' contains TEXT") { |v| opts[:route] = v }
+    o.on("--with-source", "include the code of every reached method in each trace") { opts[:source] = true }
   end.parse!
   repo = File.expand_path(ARGV.fetch(0) { abort "usage: ruby route_tracer.rb REPO [--out trace.json]" })
 
@@ -628,7 +643,7 @@ if $PROGRAM_NAME == __FILE__
   store.insert(:routes, routes)
 
   # 3. TRACE
-  tracer = Tracer.new(store, classes, filters, repo, opts[:depth])
+  tracer = Tracer.new(store, classes, filters, repo, opts[:depth], with_source: opts[:source])
   traces = routes.map do |r|
     t = tracer.trace(r)
     log(:trace, "#{t['route'].ljust(40)} -> #{t['handler'] || '?'}: #{t['methods'].size} methods, #{t['files'].size} files")
