@@ -2,6 +2,8 @@
 #
 #   name:        case name (also the results/ folder name)
 #   repo:        path relative to test_repos/
+#   stack:       language / framework, shown in the README results table
+#   source:      where the known bugs come from (CVE, advisory, challenge list)
 #   vulnerable:  routes with a known BOLA; each must be flagged (verdict likely or possible)
 #   safe:        routes that check ownership; each must NOT be flagged
 #
@@ -11,6 +13,7 @@
 
 - name: aegra-v0.9.6
   repo: aegra-v0.9.6
+  stack: Python / FastAPI
   source: CVE-2026-44504 / GHSA-m98r-6667-4wq7
   vulnerable:
     - POST /threads/{thread_id}/runs
@@ -40,6 +43,7 @@
 
 - name: dvws-node
   repo: node/dvws-node
+  stack: Node.js / Express
   source: CHALLENGES.md #15, #19, #33, #39, #53
   vulnerable:
     - GET /api/v2/notes/:noteId                # 15 IDOR

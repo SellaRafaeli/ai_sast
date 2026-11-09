@@ -26,6 +26,20 @@ It streams the tracer's and analyzer's output as they run, including each route'
 
 A repo passes when every known BOLA is flagged and no safe route is. The command exits 1 if any repo fails. The labels live in [`expected.yml`](expected.yml). Each run's `trace.json`, `bola_report.md` and `run.log` go to `test_repos/results/<case>/` (gitignored).
 
+### Results in the main README
+
+Every run except `--trace-only` saves each repo's result to [`scoreboard.json`](scoreboard.json) and rewrites the **Test results** section at the top of the [main README](../README.md) from it. That section has:
+
+- a one-line total: known BOLAs detected, false positives, apps passing
+- one table row per app: detected, missed, false positives, unlabeled flags, pass/fail, last run date
+- every missed BOLA across all apps, and why (not traced, or traced but scored unlikely)
+- every false positive across all apps
+- a collapsed per-app list of each route: expected vs. what the scanner said
+
+`scoreboard.json` keeps one entry per app, so running a single app (`test_repos/run_tests.rb aegra`) updates only that app's row. Apps in `expected.yml` that haven't been run show as "not run" and are left out of the totals. Commit `scoreboard.json` together with the README. After editing `expected.yml`, run `--reuse` to refresh both without calling the LLM.
+
+To add a test app: add it to `fetch.sh`, clone it with `test_repos/fetch.sh`, add an entry to `expected.yml` (`name`, `repo`, `stack`, `source`, `vulnerable`, `safe`), then run `test_repos/run_tests.rb <name>`.
+
 ## The apps
 
 | Folder | App | Language | Pinned at |
