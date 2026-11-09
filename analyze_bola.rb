@@ -149,7 +149,12 @@ workers = Array.new([opts[:jobs], batches.size].min) do
       res = analyze(b)
       results[i] = res
       flagged = res.count { |r| %w[likely possible].include?(r["verdict"]) }
-      mutex.synchronize { log(:ask, "batch #{i + 1}/#{batches.size}: #{b.size} routes, #{flagged} flagged (#{(Time.now - t0).round}s)") }
+      mutex.synchronize do
+        log(:ask, "batch #{i + 1}/#{batches.size}: #{b.size} routes, #{flagged} flagged (#{(Time.now - t0).round}s)")
+        res.sort_by { |r| -r["score"].to_i }.each do |r|
+          log(:verdict, format("%3s  %-8s  %s", r["score"] || "-", r["verdict"], r["route"]))
+        end
+      end
     end
   end
 end

@@ -440,6 +440,10 @@ end
 
 JS_INDEXER = <<~'JS'
   const ts = require('typescript'), fs = require('fs');
+  if (!ts.ScriptKind) {  // TypeScript 7+ (native compiler) has no JS compiler API
+    console.log(`typescript ${ts.version || '?'} has no compiler API; run \`npm install\` next to route_tracer.rb (pins typescript 5)`);
+    process.exit(1);
+  }
   const VERBS = new Set(['get', 'post', 'put', 'patch', 'delete', 'all']);
   const NEST = { Get: 'GET', Post: 'POST', Put: 'PUT', Patch: 'PATCH', Delete: 'DELETE', All: 'ANY' };
   // Receivers that are HTTP *clients* or maps, not servers: axios.get('/x'), cache.get(...)
@@ -578,9 +582,10 @@ JS
 def index_js(files)
   empty = { "defs" => [], "classes" => {}, "routes" => [], "filters" => [] }
   return empty if files.empty?
-  # Find the `typescript` package in local or global node_modules.
+  # Find the `typescript` package: next to this script (pinned to 5.x by package.json), then NODE_PATH, then global.
   global = `npm root -g 2>/dev/null`.strip rescue ""
-  env = { "NODE_PATH" => [ENV["NODE_PATH"], global].reject { |p| p.nil? || p.empty? }.join(File::PATH_SEPARATOR) }
+  paths = [File.join(__dir__, "node_modules"), ENV["NODE_PATH"], global]
+  env = { "NODE_PATH" => paths.reject { |p| p.nil? || p.empty? }.join(File::PATH_SEPARATOR) }
   out = IO.popen(env, ["node", "-e", JS_INDEXER], "r+", err: %i[child out]) do |io|
     io.write(JSON.dump(files))
     io.close_write

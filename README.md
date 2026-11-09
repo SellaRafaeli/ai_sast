@@ -16,7 +16,7 @@ It's a proof of concept: simple heuristics, readable logs, no attempt at complet
 | Everything | Ruby 3.3+ (uses the built-in `prism` parser) |
 | Mongo storage | MongoDB running locally and `gem install mongo` (without the gem, an in-memory store is used and results go to files only) |
 | Python apps | `python3` |
-| Node/TypeScript apps | `node` and `npm i -g typescript` (used as the JS/TS parser) |
+| Node/TypeScript apps | `node`, and `npm install` in this folder (pins TypeScript 5, used as the JS/TS parser; TypeScript 7 has no compiler API) |
 | Analysis (and `--llm-resolve`) | An Anthropic or OpenAI API key |
 
 Keep `llm.rb` next to the two scripts; both use it.
@@ -155,6 +155,10 @@ analyze_bola.rb
 - **Skipped directories:** `frontend/`, `client/`, `public/`, `static/`, `assets/`, test folders, `node_modules/` and `vendor/` aren't indexed (see `SKIP_DIRS`).
 - **Partial traces:** the trace is static, and an authorization check in code it didn't reach looks like a missing check. The analyzer prompt tells the model this. Scores are a triage order for manual review, not proof, and aren't perfectly comparable across batches.
 - **Size caps:** methods longer than 300 lines are cut in `sources` (`MAX_SOURCE_LINES`).
+
+## Testing
+
+`test_repos/run_tests.rb` runs both scripts on real apps with known BOLAs and checks the results against `test_repos/expected.yml`. See [test_repos/README.md](test_repos/README.md).
 
 ## Files
 
