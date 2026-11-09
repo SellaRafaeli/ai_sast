@@ -3,7 +3,10 @@
 # methods/files that may run when the route is hit.
 #
 #   ruby route_tracer.rb /path/to/repo [--out trace.json] [--depth 6] [--route posts]
-#                                      [--with-source] [--all-routes]
+#                                      [--with-source] [--all-routes] [--llm-resolve]
+#
+# Tracing makes no LLM calls by default. The BOLA analysis is a separate step:
+#   ruby analyze_bola.rb trace.json
 #
 # Pipeline (each step logs what it does):
 #   1. INDEX   parse every .rb (Prism), .py (python3 ast) and .js/.ts (node + typescript)
@@ -11,7 +14,7 @@
 #   2. ROUTES  find routes: Rails routes.rb, Sinatra, Flask/FastAPI, Django urls.py,
 #              Express/Koa/Fastify (app.get(...)), NestJS (@Controller/@Get) -> Mongo `routes`
 #   3. TRACE   BFS from each handler: look up each call name in the index,
-#              resolve it with simple heuristics (+ optional LLM), recurse.
+#              resolve it with simple heuristics (+ LLM with --llm-resolve), recurse.
 #   4. TRIM    keep only routes that take input (path params, a body, query args,
 #              or code on the path that reads request params)  -> Mongo `traces`
 #   5. OUTPUT  trace.json (full) + trace.txt (indented, human-readable)
@@ -19,15 +22,16 @@
 # Node/TS: needs `node` and the `typescript` package (npm i -g typescript).
 # Mongo: set MONGO_URL (default mongodb://127.0.0.1:27017/route_tracer).
 #        If the `mongo` gem is missing, an in-memory store is used instead.
-# LLM:   set ANTHROPIC_API_KEY to let an LLM pick among ambiguous call targets.
-#        Without it, ambiguous calls (2..MAX_FANOUT candidates) follow all candidates.
+# LLM:   off by default. With --llm-resolve and ANTHROPIC_API_KEY or OPEN_AI_API_KEY (env or .env,
+#        see llm.rb), an LLM picks among ambiguous call targets. Otherwise ambiguous calls
+#        (2..MAX_FANOUT candidates) follow all candidates.
 
 require "prism"
 require "json"
 Encoding.default_external = Encoding::UTF_8 # source files are UTF-8 even under a C/ASCII locale
 require "optparse"
 require "set"
-require "net/http"
+require_relative "llm"
 
 MAX_FANOUT = 3 # follow at most this many same-named candidates for one call
 MAX_SOURCE_LINES = 300 # --with-source: cap per method
@@ -594,9 +598,10 @@ end
 # ─────────────────────────── 3. TRACE ───────────────────────────
 
 class Tracer
-  def initialize(store, classes, filters, repo, depth, with_source: false)
+  def initialize(store, classes, filters, repo, depth, with_source: false, llm: false)
     @store, @classes, @filters, @repo, @depth = store, classes, filters, repo, depth
     @with_source = with_source
+    @llm = llm
     @llm_cache = {}
     @file_lines = {}
   end
@@ -733,10 +738,9 @@ class Tracer
     picked ? [picked, "llm"] : [cands, "ambiguous"]
   end
 
-  # Optional: ask the LLM which of the same-named candidates the call really hits.
+  # Only with --llm-resolve: ask the LLM which of the same-named candidates the call really hits.
   def llm_pick(call, caller, cands)
-    key = ENV["ANTHROPIC_API_KEY"]
-    return nil unless key
+    return nil unless @llm
     @llm_cache[[caller["id"], call["name"]]] ||= begin
       lines = File.readlines(File.join(@repo, caller["file"]))[(caller["start"] - 1)...caller["end"]].join
       prompt = <<~P
@@ -749,14 +753,7 @@ class Tracer
         #{cands.map { |d| "- #{d['id']} (class #{d['owner'] || '-'})" }.join("\n")}
         Reply ONLY with a JSON array of the candidate ids that are plausible.
       P
-      uri = URI("https://api.anthropic.com/v1/messages")
-      req = Net::HTTP::Post.new(uri, "content-type" => "application/json", "x-api-key" => key,
-                                     "anthropic-version" => "2023-06-01")
-      req.body = JSON.dump(model: ENV.fetch("TRACER_MODEL", "claude-sonnet-5-5"), max_tokens: 300,
-                           messages: [{ role: "user", content: prompt }])
-      res = Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |h| h.request(req) }
-      text = JSON.parse(res.body).dig("content", 0, "text").to_s
-      ids = JSON.parse(text[/\[.*\]/m] || "[]")
+      ids = Array(LLM.extract_json(LLM.ask(prompt, max_tokens: 300)))
       log(:llm, "#{caller['name']} -> #{call['name']}: #{ids.size}/#{cands.size} candidates kept")
       cands.select { |d| ids.include?(d["id"]) }
     rescue StandardError => e
@@ -856,7 +853,7 @@ end
 # ─────────────────────────── main ───────────────────────────
 
 if $PROGRAM_NAME == __FILE__
-  opts = { out: "trace.json", depth: 6, route: nil, source: false }
+  opts = { out: "trace.json", depth: 6, route: nil, source: false, llm: false }
   OptionParser.new do |o|
     o.banner = "usage: ruby route_tracer.rb REPO [options]"
     o.on("--out FILE", "output JSON (a .txt tree is written next to it)") { |v| opts[:out] = v }
@@ -864,8 +861,16 @@ if $PROGRAM_NAME == __FILE__
     o.on("--route TEXT", "only trace routes whose 'VERB /path' contains TEXT") { |v| opts[:route] = v }
     o.on("--with-source", "include the code of every reached method (sources + source_text)") { opts[:source] = true }
     o.on("--all-routes", "keep routes that take no input too") { opts[:all] = true }
+    o.on("--llm-resolve", "let an LLM pick among ambiguous call targets (off by default)") { opts[:llm] = true }
   end.parse!
   repo = File.expand_path(ARGV.fetch(0) { abort "usage: ruby route_tracer.rb REPO [--out trace.json]" })
+  if opts[:llm]
+    LLM.load_dotenv
+    abort "[llm] --llm-resolve needs a key: #{LLM.describe}" unless LLM.available?
+    log(:llm, "#{LLM.describe} (used only to pick among ambiguous call targets)")
+  else
+    log(:llm, "off -> ambiguous calls follow all candidates (--llm-resolve to change)")
+  end
 
   # 1. INDEX
   files = Dir.glob("**/*.{rb,py,js,jsx,mjs,cjs,ts,tsx}", base: repo)
@@ -907,9 +912,9 @@ if $PROGRAM_NAME == __FILE__
   store.insert(:routes, routes)
 
   # 3. TRACE
-  tracer = Tracer.new(store, classes, filters, repo, opts[:depth], with_source: opts[:source])
+  tracer = Tracer.new(store, classes, filters, repo, opts[:depth], with_source: opts[:source], llm: opts[:llm])
   traces = routes.map do |r|
-    t = tracer.trace(r)
+    t = { "repo" => repo }.merge(tracer.trace(r))
     log(:trace, "#{t['route'].ljust(40)} -> #{t['handler'] || '?'}: #{t['methods'].size} methods, " \
                 "#{t['files'].size} files, input: #{t['input'].empty? ? 'none' : t['input'].join('+')}")
     t

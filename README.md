@@ -1,0 +1,166 @@
+# Route tracer + BOLA analyzer (POC)
+
+Two scripts that find BOLA/IDOR candidates in a web app's codebase:
+
+1. **`route_tracer.rb`** finds every HTTP route, follows the calls from its handler (and the filters/middleware/guards that run before it), and saves each route's call tree and code. It makes no LLM calls unless you pass `--llm-resolve`.
+2. **`analyze_bola.rb`** sends that code to an LLM in batches, asks whether each route looks like a BOLA, and ranks the routes from most to least likely.
+
+They run as two separate commands: trace once, then analyze (or re-analyze) the saved `trace.json` as often as you like.
+
+It's a proof of concept: simple heuristics, readable logs, no attempt at completeness.
+
+## Requirements
+
+| Needed for | What |
+|---|---|
+| Everything | Ruby 3.3+ (uses the built-in `prism` parser) |
+| Mongo storage | MongoDB running locally and `gem install mongo` (without the gem, an in-memory store is used and results go to files only) |
+| Python apps | `python3` |
+| Node/TypeScript apps | `node` and `npm i -g typescript` (used as the JS/TS parser) |
+| Analysis (and `--llm-resolve`) | An Anthropic or OpenAI API key |
+
+Keep `llm.rb` next to the two scripts; both use it.
+
+## Setup
+
+Copy `.env.example` to `.env` (in the directory you run from, or next to the scripts) and set **one** key:
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+# or
+OPEN_AI_API_KEY=sk-...
+```
+
+Optional settings:
+
+| Variable | Meaning | Default |
+|---|---|---|
+| `LLM_PROVIDER` | `anthropic` or `openai`, when both keys are set | `anthropic` |
+| `LLM_MODEL` | Model name | `claude-sonnet-5-5` / `gpt-5` |
+| `MONGO_URL` | Mongo connection string | `mongodb://127.0.0.1:27017/route_tracer` |
+| `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL` | Proxy or compatible endpoint | official APIs |
+
+Real environment variables take priority over `.env`. `OPENAI_API_KEY` is accepted as well as `OPEN_AI_API_KEY`.
+
+## Usage
+
+```bash
+# 1. Trace the routes (writes trace.json + trace.txt; no LLM calls)
+ruby route_tracer.rb /path/to/repo --with-source
+
+# 2. Analyze them with the LLM (writes bola_report.json + bola_report.md)
+ruby analyze_bola.rb trace.json
+```
+
+Start small on a big repo: `ruby analyze_bola.rb --limit 20`, or `--dry-run` to see the exact prompt without calling the API.
+
+### `route_tracer.rb` options
+
+| Option | Meaning |
+|---|---|
+| `--with-source` | Include each reached method's code (`sources`) and one LLM-ready text (`source_text`). **Required for the analyzer.** |
+| `--out FILE` | Output JSON (default `trace.json`; a `.txt` tree is written next to it) |
+| `--depth N` | Max call depth (default 6) |
+| `--route TEXT` | Only routes whose `VERB /path` contains TEXT |
+| `--all-routes` | Keep routes that take no input (dropped by default) |
+| `--llm-resolve` | Let the LLM pick among 2–3 same-named call targets. Off by default: all candidates are followed. Needs an API key. |
+
+### `analyze_bola.rb` options
+
+| Option | Meaning |
+|---|---|
+| `--batch N` | Routes per LLM call (default 10) |
+| `--max-chars N` | Max code characters per call (default 150,000; a batch closes early when full) |
+| `--jobs N` | LLM calls in parallel (default 3) |
+| `--limit N` | Only the first N routes |
+| `--out NAME` | Report base name (default `bola_report`) |
+| `--dry-run` | Print the batches and the first prompt; no API calls |
+
+## What you get
+
+**`trace.txt`**: one indented tree per route, filters first, then the handler:
+
+```
+PATCH /posts/:id  ->  PostsController#update
+  ApplicationController#authenticate_user!  [before_filter]  app/controllers/application_controller.rb:6-8
+    ApplicationController#current_user  [call]  app/controllers/application_controller.rb:3-5
+      User.find  [model_call]  app/models/user.rb  (leaf)
+  PostsController#load_post  [before_filter]  app/controllers/posts_controller.rb:8-8
+    Post.find  [model_call]  app/models/post.rb  (leaf)
+  PostsController#update  [handler]  app/controllers/posts_controller.rb:5-5
+    ...
+```
+
+Edge labels: `handler`, `before_filter`, `call` (resolved), `model_call` (data access on a model, e.g. `Post.find`; the key IDOR signal), `ambiguous` (several same-named candidates, all followed), `llm` (the LLM picked among candidates; only with `--llm-resolve`). Node tags: `seen` (already expanded above), `cycle`, `truncated` (depth limit), `external` (library code, e.g. a Devise or Passport guard).
+
+**`trace.json`**: one object per route:
+
+| Key | Content |
+|---|---|
+| `route`, `framework`, `handler`, `repo` | What and where |
+| `input` | Why the route takes input: `path`, `body`, `query`, `request_read` |
+| `files`, `methods` | Everything reached |
+| `model_calls` | Data-access calls on models (`Invoice.findById`, `Order.get`...) |
+| `external` | Filters/middleware with no source in the app |
+| `unresolved` | Calls skipped because too many methods share the name |
+| `tree` | The call tree |
+| `sources` | (with `--with-source`) each reached method's code, in visit order |
+| `source_text` | (with `--with-source`) the same code as one text, with a header, ready for an LLM |
+
+**`bola_report.md`**: a ranked table of every route (score 0–100, verdict `likely`/`possible`/`unlikely`, object, reason), then details for likely and possible ones: data access, auth checks seen, evidence (file:line) and a suggested fix. **`bola_report.json`** has the same data.
+
+**Mongo** (database from `MONGO_URL`): `defs` (the index), `routes`, `traces`, `findings`. Each run replaces that repo's earlier data.
+
+## How it works
+
+```
+route_tracer.rb
+  1. INDEX   parse .rb (Prism), .py (python ast), .js/.ts (TypeScript compiler)
+             -> every method/function: name, class, file, lines, the calls it makes
+  2. ROUTES  find routes per framework (table below)
+  3. TRACE   from each handler (after its filters): look each call up by name in the index,
+             pick the target with simple rules, recurse
+  4. TRIM    drop routes with no input: no path params, not POST/PUT/PATCH,
+             no extra handler args, and no code reading request params
+  5. OUTPUT  trace.json / trace.txt / Mongo
+
+analyze_bola.rb
+  1. LOAD trace.json   2. BATCH routes   3. ASK the LLM per batch (JSON verdict + score)
+  4. RANK by score     5. OUTPUT report.json / report.md / Mongo
+```
+
+**Call resolution rules**, in order:
+1. Calls only resolve within the same language.
+2. `Constant.method` resolves to that class and its ancestors. If the method isn't defined in the app (an ORM finder), it becomes a `model_call` leaf.
+3. Implicit `self` calls resolve to the same class, then ancestors and included modules, then the same file, then anywhere.
+4. `obj.method` resolves to any same-named method outside the caller's own class. One candidate is followed. Two or three are followed all, or the LLM picks among them with `--llm-resolve`. More are skipped and listed in `unresolved`.
+
+### Supported frameworks
+
+| Framework | Routes | Before-handler code traced |
+|---|---|---|
+| Rails | `config/routes.rb`: `resources`/`resource` (`only`/`except`), nested, `member`/`collection`, `namespace`, `scope`, `get ... to:`, `root` | `before_action` / `skip_before_action` (`only`/`except`) through the controller's superclasses and included concerns |
+| Sinatra | `get '/x' do ... end` | `before do ... end` in the same file |
+| Flask / FastAPI | `@app.route(..., methods=)`, `@app.get(...)`, `@router.post(...)` | `@app.before_request` (same file), decorators like `@login_required`, `Depends(...)` |
+| Django | `urls.py`: `path(...)` / `re_path(...)` to function views and `View.as_view()` (one route per defined `get`/`post`/...) | none |
+| Express / Koa-router / Fastify | `app.get('/x', mw..., handler)`: inline, referenced (`ctrl.show`), wrapped (`asyncHandler(fn)`) and arrays of middleware | per-route middleware, `app.use(mw)` in the same file |
+| NestJS | `@Controller('prefix')` + `@Get/@Post/...(':id')` | `@UseGuards(...)` on the class and the method, traced into `canActivate` |
+
+## Known limits
+
+- **Prefixes:** mounted routers and blueprints (`app.use('/api', router)`, `register_blueprint(url_prefix=)`, Django `include()`) aren't followed, so their paths lack the prefix.
+- **Routing styles not found:** file-based routing (Next.js API routes), `router.route('/x').get(...)` chains, and Fastify `fastify.route({...})`.
+- **Dynamic dispatch:** `send`, `getattr`, `method_missing` and dynamically defined methods aren't followed.
+- **Injected objects:** calls through them, like `this.repo.save` or `prisma.user.findUnique`, resolve by name only. They may land on an unrelated same-named function, or be missed as data access.
+- **Skipped directories:** `frontend/`, `client/`, `public/`, `static/`, `assets/`, test folders, `node_modules/` and `vendor/` aren't indexed (see `SKIP_DIRS`).
+- **Partial traces:** the trace is static, and an authorization check in code it didn't reach looks like a missing check. The analyzer prompt tells the model this. Scores are a triage order for manual review, not proof, and aren't perfectly comparable across batches.
+- **Size caps:** methods longer than 300 lines are cut in `sources` (`MAX_SOURCE_LINES`).
+
+## Files
+
+| File | Purpose |
+|---|---|
+| `route_tracer.rb` | Index, routes, trace, trim, output |
+| `analyze_bola.rb` | LLM analysis and ranking |
+| `llm.rb` | Shared Anthropic/OpenAI client and `.env` loader |
+| `.env.example` | Key template |
