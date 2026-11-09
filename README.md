@@ -11,9 +11,9 @@ Each test app is a real codebase with known BOLA/IDOR bugs. [`test_repos/expecte
 
 | App | Stack | Known bugs from | Coverage | Not covered | False positives | Unlabeled flags | Tested |
 |---|---|---|---|---|---|---|---|
-| aegra-v0.9.6 | Python / FastAPI | CVE-2026-44504 / GHSA-m98r-6667-4wq7 | 🟢 100% (3/3) | — | 0/12 | 4 | 2026-11-09 12:05 UTC |
-| dvws-node | Node.js / Express | CHALLENGES.md #15, #19, #33, #39, #53 | 🟢 86% (6/7) | `POST /graphql`: GraphQL resolvers aren't traced yet; the route is served by Apollo (applyMiddleware) and the tracer only sees its rate limiter | 0/0 | 8 | 2026-11-09 12:23 UTC |
-| railsgoat | Ruby / Rails | OWASP RailsGoat: spec/vulnerabilities + code review | 🟢 100% (8/8) | — | 1/9 | 2 | 2026-11-09 12:52 UTC |
+| [aegra-v0.9.6](https://github.com/aegra/aegra) | Python / FastAPI | CVE-2026-44504 / GHSA-m98r-6667-4wq7 | 🟢 100% (3/3) | — | 0/12 | 4 | 2026-11-09 12:05 UTC |
+| [dvws-node](https://github.com/snoopysecurity/dvws-node) | Node.js / Express | CHALLENGES.md #15, #19, #33, #39, #53 | 🟢 86% (6/7) | `POST /graphql`: GraphQL resolvers aren't traced yet; the route is served by Apollo (applyMiddleware) and the tracer only sees its rate limiter | 0/0 | 8 | 2026-11-09 12:23 UTC |
+| [railsgoat](https://github.com/OWASP/railsgoat) | Ruby / Rails | OWASP RailsGoat: spec/vulnerabilities + code review | 🟢 100% (8/8) | — | 1/9 | 2 | 2026-11-09 12:52 UTC |
 | **Total** | | | **🟢 94% (17/18)** | **1 not covered** | **1/21** | **14** | |
 
 ### Not covered (1)
@@ -34,7 +34,7 @@ Known BOLAs the scanner didn't flag, and why. Explanations come from `gaps:` in 
 
 <details><summary><b>aegra-v0.9.6</b> 🟢 100% (3/3) coverage · 0/12 false positives · 4 unlabeled flags · tested 2026-11-09 12:05 UTC</summary>
 
-Python / FastAPI · bugs from CVE-2026-44504 / GHSA-m98r-6667-4wq7 · 44 routes traced, 7 flagged · tested 2026-11-09 12:05 UTC with openai / gpt-5
+[Homepage](https://github.com/aegra/aegra) · Python / FastAPI · bugs from CVE-2026-44504 / GHSA-m98r-6667-4wq7 · 44 routes traced, 7 flagged · tested 2026-11-09 12:05 UTC with openai / gpt-5
 
 | | Route | Expected | Scanner said |
 |---|---|---|---|
@@ -62,7 +62,7 @@ Python / FastAPI · bugs from CVE-2026-44504 / GHSA-m98r-6667-4wq7 · 44 routes 
 
 <details><summary><b>dvws-node</b> 🟢 86% (6/7) coverage · 0/0 false positives · 8 unlabeled flags · tested 2026-11-09 12:23 UTC</summary>
 
-Node.js / Express · bugs from CHALLENGES.md #15, #19, #33, #39, #53 · 57 routes traced, 14 flagged · tested 2026-11-09 12:23 UTC with openai / gpt-5
+[Homepage](https://github.com/snoopysecurity/dvws-node) · Node.js / Express · bugs from CHALLENGES.md #15, #19, #33, #39, #53 · 57 routes traced, 14 flagged · tested 2026-11-09 12:23 UTC with openai / gpt-5
 
 | | Route | Expected | Scanner said |
 |---|---|---|---|
@@ -86,7 +86,7 @@ Node.js / Express · bugs from CHALLENGES.md #15, #19, #33, #39, #53 · 57 route
 
 <details><summary><b>railsgoat</b> 🟢 100% (8/8) coverage · 1/9 false positives · 2 unlabeled flags · tested 2026-11-09 12:52 UTC</summary>
 
-Ruby / Rails · bugs from OWASP RailsGoat: spec/vulnerabilities + code review · 42 routes traced, 11 flagged · tested 2026-11-09 12:52 UTC with openai / gpt-5, scanner `6ca0e81-dirty`
+[Homepage](https://github.com/OWASP/railsgoat) · Ruby / Rails · bugs from OWASP RailsGoat: spec/vulnerabilities + code review · 42 routes traced, 11 flagged · tested 2026-11-09 12:52 UTC with openai / gpt-5, scanner `6ca0e81-dirty`
 
 | | Route | Expected | Scanner said |
 |---|---|---|---|
@@ -154,7 +154,7 @@ Optional settings:
 | `MONGO_URL` | Mongo connection string | `mongodb://127.0.0.1:27017/route_tracer` |
 | `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL` | Proxy or compatible endpoint | official APIs |
 
-Real environment variables take priority over `.env`. `OPENAI_API_KEY` is accepted as well as `OPEN_AI_API_KEY`.
+Real environment variables take priority over `.env`. `ANTHROPIC_API_KEY` is accepted as well as `OPEN_AI_API_KEY`.
 
 ## Usage
 
@@ -263,16 +263,47 @@ analyze_bola.rb
 ## Known limits
 
 - **Prefixes:** Python blueprints and includes (`register_blueprint(url_prefix=)`, Django `include()`) aren't followed, so their paths lack the prefix. Express mounts are followed, but middleware given to the mount (`app.use('/api', auth, router)`) isn't added to the routes' filters, and a router mounted at two prefixes only gets the first.
-- **Routing styles not found:** file-based routing (Next.js API routes), Fastify `fastify.route({...})`, and GraphQL resolvers (`apolloServer.applyMiddleware`, `graphqlHTTP`): only the HTTP route is seen, not the resolvers behind it.
+- **GraphQL:** resolvers behind `apolloServer.applyMiddleware` or `graphqlHTTP` aren't traced. Only the HTTP route is seen (often just its middleware), so a BOLA inside a resolver is missed. This is the one miss in the test results (dvws-node `POST /graphql`).
+- **Other routing styles not found:** file-based routing (Next.js API routes), Fastify `fastify.route({...})`, and in Rails `match`, `concern`/`concerns`, `draw` (routes split across files) and mounted engines (`mount`).
+- **Non-HTTP entry points:** WebSocket handlers (Socket.IO, ActionCable channels), background jobs and message consumers aren't routes, so they aren't traced.
 - **Dynamic dispatch:** `send`, `getattr`, `method_missing` and dynamically defined methods aren't followed.
 - **Injected objects:** calls through them, like `this.repo.save` or `prisma.user.findUnique`, resolve by name only. They may land on an unrelated same-named function, or be missed as data access.
 - **Skipped directories:** `frontend/`, `client/`, `public/`, `static/`, `assets/`, test folders, `node_modules/` and `vendor/` aren't indexed (see `SKIP_DIRS`).
 - **Partial traces:** the trace is static, and an authorization check in code it didn't reach looks like a missing check. The analyzer prompt tells the model this. Scores are a triage order for manual review, not proof, and aren't perfectly comparable across batches.
+- **One bug class:** the analyzer asks about object-level authorization. It often also flags nearby bugs that expose other users' data (missing admin checks, mass assignment, path traversal), but it doesn't look for them systematically.
+- **By design or a bug:** whether open access to an object is intended can't be told from the code alone (public profiles, shared links). Those show up as flags to review by hand.
+- **Results vary:** LLM verdicts and scores can change between runs and between models. The test results above are from one run per app.
 - **Size caps:** methods longer than 300 lines are cut in `sources` (`MAX_SOURCE_LINES`).
 
 ## Testing
 
-`test_repos/run_tests.rb` runs both scripts on real apps with known BOLAs and checks the results against `test_repos/expected.yml`. See [test_repos/README.md](test_repos/README.md).
+The scanner is checked against real apps with known BOLAs: `test_repos/run_tests.rb` runs both scripts on each app and compares the results with the labels in `test_repos/expected.yml`. The **Test results** section at the top of this README is generated from the latest run.
+
+The current test apps, one per language, each pinned to a fixed version so results are reproducible:
+
+| App | Stack | Known BOLAs from |
+|---|---|---|
+| [aegra](https://github.com/aegra/aegra) v0.9.6 | Python / FastAPI | A real project: CVE-2026-44504 / GHSA-m98r-6667-4wq7 |
+| [dvws-node](https://github.com/snoopysecurity/dvws-node) | Node.js / Express | A deliberately vulnerable app: `CHALLENGES.md` #15, #19, #33, #39, #53 |
+| [RailsGoat](https://github.com/OWASP/railsgoat) | Ruby / Rails | OWASP's deliberately vulnerable app: its IDOR spec plus code review |
+
+For each app, `expected.yml` lists the routes with a known BOLA and some routes known to check ownership ("safe"). A run reports:
+
+- **coverage:** the share of known BOLAs the scanner flagged
+- **false positives:** safe routes it flagged
+- **unlabeled flags:** flags on routes `expected.yml` doesn't list, to review by hand. These may be new findings: in RailsGoat, the scanner flagged `POST /password_resets`, which looks like a real BOLA that the app's docs don't mention.
+
+```bash
+test_repos/fetch.sh                  # clone the test apps at their pinned versions
+test_repos/run_tests.rb              # run every app (~2-3 min, ~12 LLM calls)
+test_repos/run_tests.rb aegra        # one app
+test_repos/run_tests.rb --trace-only # no LLM calls: only check the expected routes get traced
+test_repos/run_tests.rb --reuse      # re-score the last run after editing expected.yml
+```
+
+To add a test app: add it to `fetch.sh`, clone it, add an entry to `expected.yml` (`name`, `repo`, `homepage`, `stack`, `source`, `vulnerable`, `safe`, and optionally `gaps`), then run `test_repos/run_tests.rb <name>`. Details and notes on each app are in [test_repos/README.md](test_repos/README.md).
+
+**Know a repo with known BOLAs that we should test on?** Email me at [sella.rafaeli@gmail.com](mailto:sella.rafaeli@gmail.com). Real projects with published advisories and other languages or frameworks are especially welcome.
 
 ## Files
 
@@ -281,4 +312,13 @@ analyze_bola.rb
 | `route_tracer.rb` | Index, routes, trace, trim, output |
 | `analyze_bola.rb` | LLM analysis and ranking |
 | `llm.rb` | Shared Anthropic/OpenAI client and `.env` loader |
+| `package.json`, `package-lock.json` | Pin TypeScript 5, the JS/TS parser (`npm install`) |
 | `.env.example` | Key template |
+| `trace.json`, `trace.txt` | Sample tracer output from an earlier run |
+| `test_repos/fetch.sh` | Clones the test apps at their pinned versions |
+| `test_repos/run_tests.rb` | Runs the scanner on each test app, scores it, and updates `scoreboard.json` and the Test results section |
+| `test_repos/expected.yml` | Known BOLA and safe routes per test app (the ground truth) |
+| `test_repos/scoreboard.json` | Latest result per test app |
+| `test_repos/README.md` | How the tests work, and notes on each app's bugs |
+
+Not committed: the cloned apps (`test_repos/aegra-v0.9.6/`, `test_repos/node/`, `test_repos/ruby/`), each run's output (`test_repos/results/`) and your `.env`.

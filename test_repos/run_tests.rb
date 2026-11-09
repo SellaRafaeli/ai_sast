@@ -174,6 +174,8 @@ MAX_LISTED = 3 # "Not covered" cell in the main table lists at most this many ro
 
 def cell(s) = s.to_s.gsub("|", "\\|").gsub(/\s+/, " ").strip
 def code(s) = "`#{cell(s)}`"
+# The app's name, linked to its homepage when expected.yml has one
+def app_link(c) = c["homepage"] ? "[#{cell(c['name'])}](#{c['homepage']})" : cell(c["name"])
 def scanner_said(x) = x["result"] == "not_traced" ? "not traced" : "#{x['verdict']} #{x['score']}"
 
 # Short "what isn't covered" for the main table: the routes, with the gap note when there is one
@@ -224,12 +226,12 @@ def render_results(cases, board)
   md << "|---|---|---|---|---|---|---|---|"
   entries.each do |c, e|
     if e.nil? || e["status"] == "error"
-      md << "| #{cell(c['name'])} | #{cell(c['stack'])} | #{cell(c['source'])} | " \
-            "#{e ? "⚠️ error: #{cell(e['error'])}" : 'not run'} | – | – | – | #{e ? when_tested(e['run_at']) : '–'} |"
+      md << "| #{app_link(c)} | #{cell(c['stack'])} | #{cell(c['source'])} | " \
+            "#{e ?"⚠️ error: #{cell(e['error'])}" : 'not run'} | – | – | – | #{e ? when_tested(e['run_at']) : '–'} |"
       next
     end
     k = counts(e)
-    md << "| #{cell(c['name'])} | #{cell(c['stack'])} | #{cell(c['source'])} | " \
+    md << "| #{app_link(c)} | #{cell(c['stack'])} | #{cell(c['source'])} | " \
           "#{grade(pct_num(k[:detected], k[:known]))} #{coverage(k)} | #{not_covered_cell(e, c)} | " \
           "#{k[:fp]}/#{k[:safe]} | #{k[:unlabeled]} | #{when_tested(e['run_at'])} |"
   end
@@ -262,7 +264,7 @@ def render_results(cases, board)
     md << "<details><summary><b>#{cell(c['name'])}</b> #{grade(pct_num(k[:detected], k[:known]))} #{coverage(k)} coverage · " \
           "#{k[:fp]}/#{k[:safe]} false positives · #{k[:unlabeled]} unlabeled flags · tested #{when_tested(e['run_at'])}</summary>"
     md << ""
-    md << "#{cell(c['stack'])} · bugs from #{cell(c['source'])} · #{e['routes_traced']} routes traced, " \
+    md << "#{c['homepage'] ? "[Homepage](#{c['homepage']}) · " : ''}#{cell(c['stack'])} · bugs from #{cell(c['source'])} · #{e['routes_traced']} routes traced, " \
           "#{e['routes_flagged']} flagged · tested #{when_tested(e['run_at'])} with #{e['model'] || 'unknown model'}" \
           "#{e['scanner'] && e['scanner'] != 'unknown' ? ", scanner `#{e['scanner']}`" : ''}"
     md << ""

@@ -38,7 +38,7 @@ Every run except `--trace-only` saves each repo's result to [`scoreboard.json`](
 
 `scoreboard.json` keeps one entry per app, so running a single app (`test_repos/run_tests.rb aegra`) updates only that app's row. Apps in `expected.yml` that haven't been run show as "not run" and are left out of the totals. Commit `scoreboard.json` together with the README. After editing `expected.yml`, run `--reuse` to refresh both without calling the LLM.
 
-To add a test app: add it to `fetch.sh`, clone it with `test_repos/fetch.sh`, add an entry to `expected.yml` (`name`, `repo`, `stack`, `source`, `vulnerable`, `safe`, and optionally `gaps`), then run `test_repos/run_tests.rb <name>`.
+To add a test app: add it to `fetch.sh`, clone it with `test_repos/fetch.sh`, add an entry to `expected.yml` (`name`, `repo`, `homepage`, `stack`, `source`, `vulnerable`, `safe`, and optionally `gaps`), then run `test_repos/run_tests.rb <name>`.
 
 ## The apps
 

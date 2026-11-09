@@ -2,6 +2,7 @@
 #
 #   name:        case name (also the results/ folder name)
 #   repo:        path relative to test_repos/
+#   homepage:    the app's project page, linked from the README results table
 #   stack:       language / framework, shown in the README results table
 #   source:      where the known bugs come from (CVE, advisory, challenge list)
 #   vulnerable:  routes with a known BOLA; the share flagged (verdict likely or possible) is the app's coverage
@@ -14,6 +15,7 @@
 
 - name: aegra-v0.9.6
   repo: aegra-v0.9.6
+  homepage: https://github.com/aegra/aegra
   stack: Python / FastAPI
   source: CVE-2026-44504 / GHSA-m98r-6667-4wq7
   vulnerable:
@@ -44,6 +46,7 @@
 
 - name: dvws-node
   repo: node/dvws-node
+  homepage: https://github.com/snoopysecurity/dvws-node
   stack: Node.js / Express
   source: "CHALLENGES.md #15, #19, #33, #39, #53"
   vulnerable:
@@ -60,6 +63,7 @@
 
 - name: railsgoat
   repo: ruby/railsgoat
+  homepage: https://github.com/OWASP/railsgoat
   stack: Ruby / Rails
   source: "OWASP RailsGoat: spec/vulnerabilities + code review"
   vulnerable:
