@@ -275,13 +275,20 @@ class RailsRoutes
       ca = first_s || opts["to"]
       add("GET", ctx[:path].empty? ? "/" : ctx[:path], *split_ca(ca, ctx)) if ca
     when *VERBS
-      # get 'x', to: 'c#a'   |   get 'x' => 'c#a'   |   get :search (inside resources)
+      # get 'x', to: 'c#a'   |   get 'x' => 'c#a'   |   get :search / get "search" (inside resources)
       target = opts["to"] || opts["__arrow"]
       res = ctx[:resource]
       if target
         add(name.upcase, "#{ctx[:path]}/#{(opts['__arrow_path'] || first_s).to_s.delete_prefix('/')}", *split_ca(target, ctx))
-      elsif res && first.is_a?(Prism::SymbolNode)
-        add(name.upcase, "#{res[:here] || res[:base]}/#{first_s}", res[:ctrl], first_s)
+      elsif res && first_s && !first_s.include?("/")
+        # Inside member/collection blocks: that path. Otherwise `on:` picks it, and by default Rails nests
+        # it like a child resource: resources :users do get "x" end -> GET /users/:user_id/x -> users#x
+        base = res[:here] || case opts["on"]&.first
+                             when "member" then res[:base]
+                             when "collection" then res[:base].sub(%r{/:id\z}, "")
+                             else ctx[:path]
+                             end
+        add(name.upcase, "#{base}/#{first_s}", res[:ctrl], first_s)
       elsif first_s&.include?("/")
         # get 'posts/recent' (implicit controller#action from path)
         c, a = first_s.delete_prefix("/").split("/", 2)
@@ -767,11 +774,29 @@ class Tracer
     out
   end
 
+  # The controller's action method: defined on the controller itself (its full name, so UsersController
+  # never picks up Api::V1::UsersController#show) or inherited from a superclass/concern.
+  def rails_action(route)
+    cands = defs_in(route["action"], "rb")
+    ancestors(route["controller"], "rb").each do |c|
+      d = cands.find { |x| class_of(x) == c }
+      return d if d
+    end
+    nil
+  end
+
+  # Rails renders a view with no action method ("implicit action") when the template exists
+  def rails_view?(route)
+    dir = route["controller"].delete_suffix("Controller").split("::")
+                             .map { |p| p.gsub(/([a-z\d])([A-Z])/, '\1_\2').downcase }.join("/")
+    Dir.glob(File.join(@repo, "app/views", dir, "#{route['action']}.*")).any?
+  end
+
   # ── route → handler def + the filters that run before it ──
   def entry_for(route)
     case route["framework"]
     when "rails"
-      handler = defs_in(route["action"], "rb").find { |d| same_class?(d["owner"], route["controller"]) }
+      handler = rails_action(route)
       chain = ancestors(route["controller"], "rb").reverse # base class first
       active = []
       chain.each do |c|
@@ -1034,6 +1059,13 @@ if $PROGRAM_NAME == __FILE__
 
   # 3. TRACE
   tracer = Tracer.new(store, classes, filters, repo, opts[:depth], with_source: opts[:source], llm: opts[:llm])
+  # `resources` declares all 7 REST routes; the app 404s on actions the controller doesn't define
+  # (unless a view template renders implicitly), so drop those
+  ghosts = routes.select { |r| r["framework"] == "rails" && !tracer.rails_action(r) && !tracer.rails_view?(r) }
+  if ghosts.any?
+    routes -= ghosts
+    log(:routes, "dropped #{ghosts.size} Rails routes whose controller action doesn't exist")
+  end
   traces = routes.map do |r|
     t = { "repo" => repo }.merge(tracer.trace(r))
     log(:trace, "#{t['route'].ljust(40)} -> #{t['handler'] || '?'}: #{t['methods'].size} methods, " \

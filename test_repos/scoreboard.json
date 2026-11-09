@@ -223,5 +223,132 @@
     "run_at": "2026-11-09T12:23:34Z",
     "model": "openai / gpt-5",
     "scanner": "unknown"
+  },
+  "railsgoat": {
+    "name": "railsgoat",
+    "stack": "Ruby / Rails",
+    "source": "OWASP RailsGoat: spec/vulnerabilities + code review",
+    "status": "ok",
+    "routes_traced": 42,
+    "routes_flagged": 11,
+    "vulnerable": [
+      {
+        "route": "GET /users/:user_id/work_info",
+        "result": "detected",
+        "verdict": "likely",
+        "score": 90
+      },
+      {
+        "route": "PATCH /users/:id",
+        "result": "detected",
+        "verdict": "likely",
+        "score": 100
+      },
+      {
+        "route": "GET /users/:user_id/messages/:id",
+        "result": "detected",
+        "verdict": "likely",
+        "score": 95
+      },
+      {
+        "route": "DELETE /users/:user_id/messages/:id",
+        "result": "detected",
+        "verdict": "likely",
+        "score": 95
+      },
+      {
+        "route": "POST /users/:user_id/messages",
+        "result": "detected",
+        "verdict": "likely",
+        "score": 90
+      },
+      {
+        "route": "DELETE /users/:user_id/pay/:id",
+        "result": "detected",
+        "verdict": "likely",
+        "score": 95
+      },
+      {
+        "route": "GET /admin/:admin_id/get_user",
+        "result": "detected",
+        "verdict": "likely",
+        "score": 95
+      },
+      {
+        "route": "GET /api/v1/mobile/:id",
+        "result": "detected",
+        "verdict": "likely",
+        "score": 100
+      }
+    ],
+    "safe": [
+      {
+        "route": "GET /users/:user_id/account_settings",
+        "result": "ok",
+        "verdict": "unlikely",
+        "score": 5
+      },
+      {
+        "route": "GET /users/:user_id/retirement",
+        "result": "ok",
+        "verdict": "unlikely",
+        "score": 5
+      },
+      {
+        "route": "GET /users/:user_id/paid_time_off",
+        "result": "ok",
+        "verdict": "unlikely",
+        "score": 5
+      },
+      {
+        "route": "GET /users/:user_id/performance",
+        "result": "ok",
+        "verdict": "unlikely",
+        "score": 5
+      },
+      {
+        "route": "GET /users/:user_id/messages",
+        "result": "ok",
+        "verdict": "unlikely",
+        "score": 5
+      },
+      {
+        "route": "GET /users/:user_id/pay/:id",
+        "result": "ok",
+        "verdict": "unlikely",
+        "score": 5
+      },
+      {
+        "route": "POST /users/:user_id/pay/update_dd_info",
+        "result": "ok",
+        "verdict": "unlikely",
+        "score": 5
+      },
+      {
+        "route": "GET /schedule/get_pto_schedule",
+        "result": "not_traced"
+      },
+      {
+        "route": "GET /api/v1/users/:id",
+        "result": "false_positive",
+        "verdict": "possible",
+        "score": 35
+      }
+    ],
+    "unlabeled": [
+      {
+        "route": "POST /password_resets",
+        "verdict": "likely",
+        "score": 95
+      },
+      {
+        "route": "GET /download",
+        "verdict": "likely",
+        "score": 90
+      }
+    ],
+    "run_at": "2026-11-09T12:52:31Z",
+    "model": "openai / gpt-5",
+    "scanner": "6ca0e81-dirty"
   }
 }

@@ -57,3 +57,36 @@
   safe: []
   gaps:
     POST /graphql: GraphQL resolvers aren't traced yet; the route is served by Apollo (applyMiddleware) and the tracer only sees its rate limiter
+
+- name: railsgoat
+  repo: ruby/railsgoat
+  stack: Ruby / Rails
+  source: "OWASP RailsGoat: spec/vulnerabilities + code review"
+  vulnerable:
+    - GET /users/:user_id/work_info               # documented IDOR (insecure_dor_spec, wiki A4): User.find_by(id: params[:user_id])
+    - PATCH /users/:id                            # update loads the user from params[:user][:id], not current_user
+    - GET /users/:user_id/messages/:id            # Message.where(id: params[:id]): anyone's message
+    - DELETE /users/:user_id/messages/:id         # same lookup, then destroy
+    - POST /users/:user_id/messages               # permits creator_id: send a message as another user
+    - DELETE /users/:user_id/pay/:id              # Pay.find_by_id(params[:id]).destroy: anyone's direct-deposit record
+    - GET /admin/:admin_id/get_user               # excluded from the admin check: any user can read any user by id
+    - GET /api/v1/mobile/:id                      # no login; model.find(params[:id]) for any class=, e.g. User
+  # Unlabeled on purpose:
+  #   GET /download: the spec files it under IDOR, but it's a path traversal (params[:name] is a file path)
+  #   POST /password_resets: flagged by the scanner. Probably a real BOLA: the client sends a serialized user
+  #     (Marshal.load(params[:user])) and that user's password is reset. Also insecure deserialization.
+  #     Found after the run, so it stays unlabeled until confirmed (labels only come from the source or
+  #     from code review done before running the scanner, so they don't favor what it already finds).
+  #   PATCH /admin/:admin_id/update_user, POST /admin/:admin_id/delete_user: admin-only check is skipped
+  #     when admin_id == "1" (function-level access control, not object ownership)
+  safe:
+    # scoped to current_user, the path id is ignored
+    - GET /users/:user_id/account_settings
+    - GET /users/:user_id/retirement
+    - GET /users/:user_id/paid_time_off
+    - GET /users/:user_id/performance
+    - GET /users/:user_id/messages
+    - GET /users/:user_id/pay/:id
+    - POST /users/:user_id/pay/update_dd_info
+    - GET /schedule/get_pto_schedule
+    - GET /api/v1/users/:id                       # returns the API token's own user

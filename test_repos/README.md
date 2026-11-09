@@ -46,6 +46,7 @@ To add a test app: add it to `fetch.sh`, clone it with `test_repos/fetch.sh`, ad
 |---|---|---|---|
 | `aegra-v0.9.6/` | [aegra](https://github.com/aegra/aegra) | Python / FastAPI | tag `v0.9.6` |
 | `node/dvws-node/` | [dvws-node](https://github.com/snoopysecurity/dvws-node) | Node.js / Express (plain JS) | commit `05e1b6f` |
+| `ruby/railsgoat/` | [OWASP RailsGoat](https://github.com/OWASP/railsgoat) | Ruby / Rails | commit `f5951f1` |
 
 ## aegra v0.9.6: CVE-2026-44504
 
@@ -95,3 +96,23 @@ The scanner also flags routes that `expected.yml` doesn't label. Most match othe
 Related, but not strictly BOLA: #18 vertical access control (admin endpoints open to regular users) and #46 cross-customer monthly statement (path traversal that reaches other customers' files).
 
 Note: `CHALLENGES.md`, `test/` and `codeql-results.sarif` describe the answers. If the analyzer ever reads files beyond route code, exclude them so it can't copy the answers.
+
+## RailsGoat: OWASP's vulnerable Rails app
+
+An intentionally vulnerable Rails app (an HR portal: pay, benefits, messages, admin). Its own spec (`spec/vulnerabilities/insecure_dor_spec.rb`) documents one IDOR: `GET /users/:user_id/work_info`. The other 7 come from reading the controllers before running the scanner. Each one looks a record up by an ID from the request with no ownership check:
+
+| Route | Bug | Where |
+|---|---|---|
+| `GET /users/:user_id/work_info` | documented IDOR: `User.find_by(id: params[:user_id])` | `app/controllers/work_info_controller.rb:4` |
+| `PATCH /users/:id` | updates the user named in `params[:user][:id]`, not `current_user` | `users_controller.rb:29` |
+| `GET` / `DELETE /users/:user_id/messages/:id` | `Message.where(id: params[:id])`: anyone's message | `messages_controller.rb:11`, `:15` |
+| `POST /users/:user_id/messages` | `creator_id` is permitted: send as another user | `messages_controller.rb:42` |
+| `DELETE /users/:user_id/pay/:id` | `Pay.find_by_id(params[:id]).destroy` | `pay_controller.rb:29` |
+| `GET /admin/:admin_id/get_user` | left out of the admin check: any user reads any user | `admin_controller.rb:3`, `:28` |
+| `GET /api/v1/mobile/:id` | no login; `model.find(params[:id])` for any `class=` | `api/v1/mobile_controller.rb:11` |
+
+The 9 safe routes load data through `current_user` and ignore the ID in the path.
+
+Unlabeled: `GET /download` (the spec calls it IDOR, but it's a path traversal), the admin `update_user`/`delete_user` routes (their admin check is skipped when `admin_id` is `1`, a function-level access bug), and `POST /password_resets`. The scanner flagged that last one after the run. It's probably a real BOLA (the client sends the serialized user whose password gets reset), but it stays unlabeled until someone confirms it.
+
+`spec/vulnerabilities/` describes the answers, and a few controllers have `# VULNERABILITY:` comments (admin mass assignment, ReDoS tutorials). None of the comments are on the routes above.

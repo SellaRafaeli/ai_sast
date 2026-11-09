@@ -201,7 +201,7 @@ def render_results(cases, board)
 
   md = [START_MARK, "## Test results", ""]
   md << "**#{grade(overall)} Coverage: #{pct(sum[:detected], sum[:known])}**: #{sum[:detected]} of #{sum[:known]} known BOLAs " \
-        "detected across #{ran.size} app#{ran.size == 1 ? '' : 's'} · #{sum[:fp]} false positives on #{sum[:safe]} safe routes · " \
+        "detected across #{ran.size} app#{ran.size == 1 ? '' : 's'} · #{sum[:fp]} false positive#{sum[:fp] == 1 ? '' : 's'} on #{sum[:safe]} safe routes · " \
         "#{sum[:unlabeled]} unlabeled flags to review."
   md << ""
   tested = if dates.empty? then "No app has been tested yet"
