@@ -350,5 +350,121 @@
     "run_at": "2026-11-09T12:52:31Z",
     "model": "openai / gpt-5",
     "scanner": "6ca0e81-dirty"
+  },
+  "crapi-workshop": {
+    "name": "crapi-workshop",
+    "stack": "Python / Django",
+    "source": "OWASP crAPI v1.1.6: docs/challenges.md #2 + code review",
+    "status": "ok",
+    "routes_traced": 25,
+    "routes_flagged": 10,
+    "vulnerable": [
+      {
+        "route": "GET /workshop/api/mechanic/mechanic_report",
+        "result": "detected",
+        "verdict": "likely",
+        "score": 90
+      },
+      {
+        "route": "GET /workshop/api/shop/orders/<order_id>",
+        "result": "detected",
+        "verdict": "likely",
+        "score": 95
+      },
+      {
+        "route": "GET /workshop/api/mechanic/service_request/<service_request_id>",
+        "result": "detected",
+        "verdict": "likely",
+        "score": 95
+      },
+      {
+        "route": "PUT /workshop/api/mechanic/service_request/<service_request_id>",
+        "result": "detected",
+        "verdict": "likely",
+        "score": 95
+      },
+      {
+        "route": "GET /workshop/api/mechanic/service_request/<service_request_id>/comment",
+        "result": "detected",
+        "verdict": "likely",
+        "score": 95
+      },
+      {
+        "route": "POST /workshop/api/mechanic/service_request/<service_request_id>/comment",
+        "result": "detected",
+        "verdict": "possible",
+        "score": 45
+      },
+      {
+        "route": "GET /workshop/api/merchant/service_requests/<vin>",
+        "result": "detected",
+        "verdict": "likely",
+        "score": 92
+      }
+    ],
+    "safe": [
+      {
+        "route": "PUT /workshop/api/shop/orders/<order_id>",
+        "result": "ok",
+        "verdict": "unlikely",
+        "score": 10
+      },
+      {
+        "route": "POST /workshop/api/shop/orders/return_order",
+        "result": "ok",
+        "verdict": "unlikely",
+        "score": 10
+      },
+      {
+        "route": "GET /workshop/api/shop/orders/all",
+        "result": "ok",
+        "verdict": "unlikely",
+        "score": 5
+      },
+      {
+        "route": "POST /workshop/api/shop/orders",
+        "result": "ok",
+        "verdict": "unlikely",
+        "score": 10
+      },
+      {
+        "route": "POST /workshop/api/shop/apply_coupon",
+        "result": "ok",
+        "verdict": "unlikely",
+        "score": 5
+      },
+      {
+        "route": "GET /workshop/api/mechanic/service_requests",
+        "result": "ok",
+        "verdict": "unlikely",
+        "score": 10
+      },
+      {
+        "route": "GET /workshop/api/mechanic/service_request",
+        "result": "ok",
+        "verdict": "unlikely",
+        "score": 10
+      }
+    ],
+    "unlabeled": [
+      {
+        "route": "GET /workshop/api/shop/orders",
+        "verdict": "likely",
+        "score": 95
+      },
+      {
+        "route": "GET /workshop/api/mechanic/receive_report",
+        "verdict": "likely",
+        "score": 90
+      },
+      {
+        "route": "GET /workshop/api/mechanic/download_report",
+        "verdict": "likely",
+        "score": 85
+      }
+    ],
+    "run_at": "2026-11-10T11:28:04Z",
+    "model": "openai / gpt-5",
+    "scanner": "269842f-dirty"
   }
 }

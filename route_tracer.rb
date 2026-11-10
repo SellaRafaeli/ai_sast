@@ -336,8 +336,13 @@ end
 # ─────────────────────────── 1+2b. INDEX + ROUTES: Python (ast) ───────────────────────────
 
 PY_INDEXER = <<~'PY'
-  import ast, json, sys
+  import ast, json, re, sys
   VERBS = {'route', 'get', 'post', 'put', 'patch', 'delete'}
+
+  def django_path(p):  # 'orders/(?P<order_id>\d+)$' or 'orders/<int:order_id>' -> 'orders/<order_id>'
+      p = re.sub(r'\(\?P<(\w+)>[^)]*\)', r'<\1>', p)
+      p = re.sub(r'<\w+:(\w+)>', r'<\1>', p)
+      return p.replace('^', '').replace('$', '')
 
   def recv_of(v):
       if isinstance(v, ast.Name): return v.id
@@ -383,6 +388,7 @@ PY_INDEXER = <<~'PY'
       return [x.arg for x in pos + a.kwonlyargs if x.arg not in dep and x.arg not in skip]
 
   res = {'defs': [], 'classes': {}, 'routes': [], 'filters': []}
+  django = {}  # urls.py rel path -> its entries: routes, or {'include': 'app.urls', 'prefix': 'api/'}
   for path, rel in json.load(sys.stdin):
       try:
           tree = ast.parse(open(path, encoding='utf-8', errors='replace').read())
@@ -416,17 +422,42 @@ PY_INDEXER = <<~'PY'
                                                     'framework': 'flask/fastapi', 'handler_id': did, 'file': rel})
       visit(tree.body, None)
 
-      if rel.endswith('urls.py'):  # Django: path('x/', views.fn) / path('x/', Cls.as_view())
+      if rel.endswith('urls.py'):  # Django: path('x/', views.fn) / path('x/', Cls.as_view()) / path('x/', include('app.urls'))
+          entries = django.setdefault(rel, [])
           for n in ast.walk(tree):
               if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in ('path', 're_path') \
                       and len(n.args) >= 2 and isinstance(n.args[0], ast.Constant):
-                  view = n.args[1]
-                  r = {'verb': 'ANY', 'path': '/' + str(n.args[0].value), 'framework': 'django', 'file': rel}
+                  view, prefix = n.args[1], django_path(str(n.args[0].value))
+                  if isinstance(view, ast.Call) and isinstance(view.func, ast.Name) and view.func.id == 'include' and view.args:
+                      mod = view.args[0]
+                      if isinstance(mod, ast.Tuple) and mod.elts: mod = mod.elts[0]  # include(('app.urls', 'ns'))
+                      if isinstance(mod, ast.Constant) and isinstance(mod.value, str):
+                          entries.append({'include': mod.value, 'prefix': prefix})
+                          continue
+                  r = {'verb': 'ANY', 'path': prefix, 'framework': 'django', 'file': rel}
                   if isinstance(view, ast.Call) and isinstance(view.func, ast.Attribute) and view.func.attr == 'as_view':
                       r['handler_class'] = recv_of(view.func.value)
                   else:
                       r['handler_name'] = call_of(view)[0]
-                  res['routes'].append(r)
+                  entries.append(r)
+
+  # Django include(): prefix each included urls.py's routes with the path that includes it,
+  # starting from the urls.py files nothing includes (the root URLconf)
+  def urls_file(mod):
+      tail = mod.replace('.', '/') + '.py'
+      return next((f for f in django if f == tail or f.endswith('/' + tail)), None)
+  def expand(rel, prefix, seen):
+      for e in django[rel]:
+          if 'include' in e:
+              tgt = urls_file(e['include'])
+              if tgt and tgt not in seen:
+                  expand(tgt, prefix + e['prefix'], seen | {tgt})
+              continue
+          res['routes'].append(dict(e, path='/' + re.sub(r'/+', '/', prefix + e['path']).lstrip('/')))
+  included = {urls_file(e['include']) for es in django.values() for e in es if 'include' in e}
+  for rel in django:
+      if rel not in included:
+          expand(rel, '', {rel})
   json.dump(res, sys.stdout)
 PY
 

@@ -12,4 +12,5 @@ dump*
 test_repos/aegra-v0.9.6/
 test_repos/node/dvws-node/
 test_repos/ruby/railsgoat/
+test_repos/python/crapi/
 test_repos/results/

@@ -11,7 +11,7 @@ The clones are not committed (see `.gitignore`). To get them:
 ## Running the tests
 
 ```bash
-test_repos/run_tests.rb                 # trace + LLM analysis on every repo (~2-3 min, ~12 LLM calls)
+test_repos/run_tests.rb                 # trace + LLM analysis on every repo (~3-4 min, ~15 LLM calls)
 test_repos/run_tests.rb aegra           # only cases whose name contains "aegra"
 test_repos/run_tests.rb --trace-only    # no LLM calls: only check the expected routes get traced
 test_repos/run_tests.rb --reuse         # re-check the last results after editing expected.yml (runs nothing)
@@ -47,6 +47,7 @@ To add a test app: add it to `fetch.sh`, clone it with `test_repos/fetch.sh`, ad
 | `aegra-v0.9.6/` | [aegra](https://github.com/aegra/aegra) | Python / FastAPI | tag `v0.9.6` |
 | `node/dvws-node/` | [dvws-node](https://github.com/snoopysecurity/dvws-node) | Node.js / Express (plain JS) | commit `05e1b6f` |
 | `ruby/railsgoat/` | [OWASP RailsGoat](https://github.com/OWASP/railsgoat) | Ruby / Rails | commit `f5951f1` |
+| `python/crapi/` | [OWASP crAPI](https://github.com/OWASP/crAPI) (only `services/workshop/` is scanned) | Python / Django | tag `v1.1.6` |
 
 ## aegra v0.9.6: CVE-2026-44504
 
@@ -116,3 +117,32 @@ The 9 safe routes load data through `current_user` and ignore the ID in the path
 Unlabeled: `GET /download` (the spec calls it IDOR, but it's a path traversal), the admin `update_user`/`delete_user` routes (their admin check is skipped when `admin_id` is `1`, a function-level access bug), and `POST /password_resets`. The scanner flagged that last one after the run. It's probably a real BOLA (the client sends the serialized user whose password gets reset), but it stays unlabeled until someone confirms it.
 
 `spec/vulnerabilities/` describes the answers, and a few controllers have `# VULNERABILITY:` comments (admin mass assignment, ReDoS tutorials). None of the comments are on the routes above.
+
+## crAPI workshop: OWASP's Completely Ridiculous API
+
+An intentionally vulnerable car-service platform built from several microservices. Only the **workshop** service is Python (Django + Django REST Framework), so the test scans just `services/workshop/`. The rest (identity in Java, community in Go, the chatbot and web UI) isn't scanned, which leaves out challenge #1 (vehicle location BOLA, in the Java identity service).
+
+Its `docs/challenges.md` documents one workshop BOLA: challenge #2, mechanic reports. The other 6 come from reading the views before running the scanner. Each one looks a record up by an ID from the request without checking that it belongs to the caller:
+
+| Route | Bug | Where |
+|---|---|---|
+| `GET /workshop/api/mechanic/mechanic_report?report_id=` | challenge #2: `ServiceRequest.objects.filter(id=report_id)`, anyone's report with the owner's VIN, email and phone | `crapi/mechanic/views.py:235` |
+| `GET /workshop/api/shop/orders/<order_id>` | no login; `Order.objects.get(id=order_id)` returns any order with the owner's email and phone | `crapi/shop/views.py:122` |
+| `GET /workshop/api/mechanic/service_request/<id>` | no login; any service request | `crapi/mechanic/views.py:372` |
+| `PUT /workshop/api/mechanic/service_request/<id>` | any signed-in user sets the status of any request | `crapi/mechanic/views.py:361` |
+| `GET /workshop/api/mechanic/service_request/<id>/comment` | any signed-in user reads any request's comments | `crapi/mechanic/views.py:335` |
+| `POST /workshop/api/mechanic/service_request/<id>/comment` | checks the caller is a mechanic, not that the request is assigned to them | `crapi/mechanic/views.py:318` |
+| `GET /workshop/api/merchant/service_requests/<vin>` | no login; every service request for any VIN | `crapi/merchant/views.py:178` |
+
+The unrouted `UserServiceCommentView` in `crapi/merchant/views.py:147` has the check these leave out (`service_request.vehicle.owner.id != user.id`).
+
+The 7 safe routes either compare `order.user` with the caller or filter by the caller (`filter(user=user)`, `filter(mechanic__user=user)`). Two of them have other bugs that aren't BOLA: `PUT /orders/<order_id>` has mass assignment (challenges #8 and #9) and `POST /apply_coupon` has SQL injection (challenge #13).
+
+Unlabeled flags from the first run:
+- `GET /workshop/api/mechanic/receive_report`: no login, opens a service request on any VIN. It's the internal endpoint that `contact_mechanic` calls, so it may be by design.
+- `GET /workshop/api/mechanic/download_report`: path traversal on report files named `report_<id>`.
+- `GET /workshop/api/shop/orders`: the same view as `/orders/<order_id>`, reached without an ID. `Order.objects.get(id=None)` finds nothing, so this is probably a false positive.
+
+`docs/challengeSolutions.md` describes the answers. If the analyzer ever reads files beyond route code, keep it out of the docs folder.
+
+The scan also tests Django routing: the routes sit behind two levels of `include()` (`workshop/` → `api/shop/` → `orders/...`) and use `re_path` regexes.

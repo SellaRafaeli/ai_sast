@@ -201,7 +201,7 @@ def render_results(cases, board)
   dates = ran.map { |_c, e| e["run_at"] }.compact.sort
   overall = pct_num(sum[:detected], sum[:known])
 
-  md = [START_MARK, "## Test results", ""]
+  md = [START_MARK, "## Benchmarks and Up-To-Date Test results", ""]
   md << "**#{grade(overall)} Coverage: #{pct(sum[:detected], sum[:known])}**: #{sum[:detected]} of #{sum[:known]} known BOLAs " \
         "detected across #{ran.size} app#{ran.size == 1 ? '' : 's'} · #{sum[:fp]} false positive#{sum[:fp] == 1 ? '' : 's'} on #{sum[:safe]} safe routes · " \
         "#{sum[:unlabeled]} unlabeled flags to review."

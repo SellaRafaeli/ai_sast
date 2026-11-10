@@ -15,3 +15,4 @@ clone() { # url ref dir
 clone https://github.com/aegra/aegra.git                v0.9.6                                   aegra-v0.9.6
 clone https://github.com/snoopysecurity/dvws-node.git   05e1b6fafd38fa37e8c1d9a909e375016fcc6e88 node/dvws-node
 clone https://github.com/OWASP/railsgoat.git          f5951f13089d85c979de09e7da3c8c0fb982f94a ruby/railsgoat
+clone https://github.com/OWASP/crAPI.git               v1.1.6                                   python/crapi

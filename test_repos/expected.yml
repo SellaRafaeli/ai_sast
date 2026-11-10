@@ -94,3 +94,36 @@
     - POST /users/:user_id/pay/update_dd_info
     - GET /schedule/get_pto_schedule
     - GET /api/v1/users/:id                       # returns the API token's own user
+
+- name: crapi-workshop
+  repo: python/crapi/services/workshop
+  homepage: https://github.com/OWASP/crAPI
+  stack: Python / Django
+  source: "OWASP crAPI v1.1.6: docs/challenges.md #2 + code review"
+  vulnerable:
+    - GET /workshop/api/mechanic/mechanic_report                                  # challenge 2: ServiceRequest.objects.filter(id=report_id), anyone's report (VIN, owner email/phone)
+    - GET /workshop/api/shop/orders/<order_id>                                    # no login; Order.objects.get(id=order_id), anyone's order + owner email/phone
+    - GET /workshop/api/mechanic/service_request/<service_request_id>             # no login; ServiceRequest.objects.get(id=...)
+    - PUT /workshop/api/mechanic/service_request/<service_request_id>             # any signed-in user sets the status of any service request
+    - GET /workshop/api/mechanic/service_request/<service_request_id>/comment     # any signed-in user reads the comments on any service request
+    - POST /workshop/api/mechanic/service_request/<service_request_id>/comment    # any mechanic comments on any request, not only ones assigned to them
+    - GET /workshop/api/merchant/service_requests/<vin>                           # no login; every service request for any VIN
+  # The unrouted merchant UserServiceCommentView has the missing check (service_request.vehicle.owner.id != user.id),
+  # which shows what the routed mechanic views above leave out.
+  # Unlabeled on purpose:
+  #   GET /workshop/api/mechanic/receive_report: no login, opens a service request on any VIN. It's the internal
+  #     endpoint contact_mechanic calls, so it's arguably by design.
+  #   GET /workshop/api/mechanic/download_report: path traversal (challenge-style), and reports are files named report_<id>
+  #   POST /workshop/api/merchant/contact_mechanic: SSRF (challenge 11), not object access
+  #   GET /workshop/api/management/users/all: any signed-in user lists every user (function-level access / data exposure)
+  #   POST /workshop/api/shop/products: any signed-in user adds products (function-level access)
+  #   GET /workshop/api/shop/orders: flagged by the scanner. Same view as /orders/<order_id> with no id, so
+  #     Order.objects.get(id=None) finds nothing; probably a false positive.
+  safe:
+    - PUT /workshop/api/shop/orders/<order_id>        # checks user != order.user (mass assignment on quantity/status is challenges 8-9, not BOLA)
+    - POST /workshop/api/shop/orders/return_order     # checks user != order.user
+    - GET /workshop/api/shop/orders/all               # Order.objects.filter(user=user)
+    - POST /workshop/api/shop/orders                  # creates the order for the caller
+    - POST /workshop/api/shop/apply_coupon            # SQL injection (challenge 13), but scoped to the caller's user_id
+    - GET /workshop/api/mechanic/service_requests     # filter(mechanic__user=user)
+    - GET /workshop/api/mechanic/service_request      # same view
