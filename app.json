@@ -14,6 +14,11 @@
     "ANTHROPIC_API_KEY": { "description": "LLM key for the analysis (or set OPEN_AI_API_KEY instead). Without a key, scans show the trace only.", "required": false },
     "POSTMARK_API_TOKEN": { "description": "Postmark server token for the action emails. Without it, no emails are sent.", "required": false },
     "NOTIFY_EMAIL": { "description": "Who gets the action emails", "value": "sella.rafaeli@gmail.com" },
-    "POSTMARK_FROM": { "description": "Sender address: a confirmed sender signature or domain in Postmark (defaults to NOTIFY_EMAIL)", "required": false }
+    "POSTMARK_FROM": { "description": "Sender address: a confirmed sender signature or domain in Postmark (defaults to NOTIFY_EMAIL)", "required": false },
+    "GOOGLE_CLIENT_ID": { "description": "Google OAuth web client ID. With the secret set, every page needs a Google sign-in.", "required": false },
+    "GOOGLE_CLIENT_SECRET": { "description": "Google OAuth web client secret", "required": false },
+    "SESSION_SECRET": { "description": "Signs the sign-in cookie", "generator": "secret" },
+    "ALLOWED_DOMAINS": { "description": "Only these email domains may sign in, comma-separated (empty: any Google account)", "required": false },
+    "ALLOWED_EMAILS": { "description": "Only these Google accounts may sign in, comma-separated (empty: any)", "required": false }
   }
 }

@@ -88,7 +88,46 @@ For the emails, add your Postmark server token (see [Emails](#emails)):
 heroku config:set -a my-app POSTMARK_API_TOKEN='...'
 ```
 
+For Google sign-in (see [Sign in with Google](#sign-in-with-google)):
+
+```bash
+heroku config:set -a my-app GOOGLE_CLIENT_ID='...' GOOGLE_CLIENT_SECRET='...' SESSION_SECRET="$(openssl rand -hex 32)"
+```
+
 Keep the app at **one web dyno**: traces and analyses wait in an in-memory queue and run one at a time inside that process. Heroku restarts dynos about once a day. A trace running at that moment is marked failed and has to be started again. An analysis goes back to "Ready to analyze", so one more click reruns it.
+
+To serve it at **ai-sast.com**, add the domain to the app, point your DNS at the target Heroku prints, and turn on Heroku's free certificates (sign-in needs https):
+
+```bash
+heroku domains:add -a my-app ai-sast.com
+```
+
+```bash
+heroku certs:auto:enable -a my-app
+```
+
+## Sign in with Google
+
+With `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` set, every page needs a Google sign-in. Each scan then records who started it and who ran its analysis; both show on the scan page, in the scans tables, in the event timeline and in the emails. Every person who signs in gets a document in the `users` collection (name, email, first and last sign-in, number of sign-ins). Without the two settings the site is open to anyone, scans are "anonymous", and the server log says so at startup.
+
+To limit who can get in, set `ALLOWED_DOMAINS` (like `variablee.com`) and/or `ALLOWED_EMAILS`. Leave both unset to allow any Google account.
+
+### Google Cloud Console, reusing an existing project
+
+In [Google Cloud Console](https://console.cloud.google.com/), pick your existing project in the project picker at the top, then open **Google Auth Platform** (older consoles call it **APIs & Services → OAuth consent screen / Credentials**):
+
+1. **Branding → Authorized domains:** add `ai-sast.com`. If Google asks you to prove you own it, do that in [Google Search Console](https://search.google.com/search-console) with a DNS TXT record.
+2. **Audience:** user type **External** (anyone with a Google account) or **Internal** (only your Google Workspace). If the publishing status is **Testing**, only the listed test users can sign in; click **Publish app** to allow everyone. The scopes below are basic ones, so publishing needs no Google review.
+3. **Data Access:** make sure the scopes include `openid`, `.../auth/userinfo.email` and `.../auth/userinfo.profile`.
+4. **Clients:** create a new **Web application** client for this app (cleaner: its own secret and redirect list), or edit an existing one. Under **Authorized redirect URIs** add every address people will use, exactly:
+   - `https://ai-sast.com/auth/google/callback`
+   - `https://www.ai-sast.com/auth/google/callback`, if `www` serves the app too
+   - `https://my-app.herokuapp.com/auth/google/callback`, if people may use the Heroku address
+   - `http://localhost:4567/auth/google/callback`, for running it locally
+
+   **Authorized JavaScript origins** aren't needed. Copy the client ID and secret into `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+
+Changes can take a few minutes to apply. A `redirect_uri_mismatch` error from Google means the address in the browser isn't in that list.
 
 ## Settings
 
@@ -102,6 +141,10 @@ Keep the app at **one web dyno**: traces and analyses wait in an in-memory queue
 | `POSTMARK_API_TOKEN` | Postmark server token. Without it, no emails are sent. | |
 | `NOTIFY_EMAIL` | Who gets the emails | `sella.rafaeli@gmail.com` |
 | `POSTMARK_FROM` | Sender address. It must be a confirmed sender signature or domain in your Postmark account. | `NOTIFY_EMAIL` |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth client. With both set, every page needs a Google sign-in. | off |
+| `SESSION_SECRET` | Signs the sign-in cookie. Without it, everyone is signed out on each restart. | random |
+| `ALLOWED_DOMAINS` | Only Google accounts with these email domains may sign in, comma-separated | any |
+| `ALLOWED_EMAILS` | Only these Google accounts may sign in, comma-separated (combined with `ALLOWED_DOMAINS`) | any |
 | `MAX_REPO_MB` | Refuse repos bigger than this after cloning | `500` |
 | `MAX_QUEUE` | Refuse new scans when this many are waiting | `10` |
 
