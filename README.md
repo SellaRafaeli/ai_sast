@@ -148,7 +148,7 @@ Two scripts that find BOLA/IDOR candidates in a web app's codebase:
 
 They run as two separate commands: trace once, then analyze (or re-analyze) the saved `trace.json` as often as you like.
 
-There's also a **web page** ([`web/`](web/README.md)) where anyone can paste a public repo URL and see its routes traced, deployable to Heroku.
+There's also a web page, **BOLA Detector, by Variablee** ([`web/`](web/README.md)), where anyone can paste a public repo URL, see its routes traced, and run the analysis. It's deployable to Heroku.
 
 It's a proof of concept: simple heuristics, readable logs, no attempt at completeness.
 

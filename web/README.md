@@ -1,6 +1,6 @@
-# Web UI
+# BOLA Detector, by Variablee (web page)
 
-A web page for `route_tracer.rb`. Anyone can paste a public repo URL and start a scan. The server clones the repo, traces its routes and shows them. A second button, **Run the analysis**, then asks an LLM which routes look like BOLA / IDOR. Results are saved in Mongo, the page refreshes itself while a step runs, and every action is emailed through Postmark.
+BOLA Detector is the web page for `route_tracer.rb`. Anyone can paste a public repo URL and start a scan. The server clones the repo, traces its routes and shows them. A second button, **Run the analysis**, then asks an LLM which routes look like BOLA / IDOR. Results are saved in Mongo, the page refreshes itself while a step runs, and every action is emailed through Postmark.
 
 | Page | What it shows |
 |---|---|

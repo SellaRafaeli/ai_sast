@@ -1,6 +1,6 @@
 {
-  "name": "route-tracer-web",
-  "description": "Web page for route_tracer.rb: paste a public repo URL, see its routes traced for BOLA / IDOR candidates.",
+  "name": "bola-detector",
+  "description": "BOLA Detector, by Variablee: paste a public repo URL, see its routes traced and scored for BOLA / IDOR.",
   "buildpacks": [
     { "url": "heroku/nodejs" },
     { "url": "heroku/python" },

@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-# web.rb — a small public web page for route_tracer.rb.
+# web.rb — BOLA Detector, by Variablee: a small public web page for route_tracer.rb.
 #
 # Anyone can paste a git repo URL and start a scan. Each scan:
 #   1. CLONE   git clone --depth 1 into a temp folder on the dyno's disk
@@ -105,8 +105,8 @@ def email(id, subject, details)
   scan = SCANS.find(_id: id).projection(repo_url: 1, base_url: 1).first or return
   name, = repo_name(scan["repo_url"])
   link = "#{scan['base_url']}/scans/#{id}"
-  body = { "From" => POSTMARK_FROM, "To" => NOTIFY_EMAIL, "Subject" => "Route Tracer · #{name}: #{subject}",
-           "TextBody" => [subject, details, "Repo: #{scan['repo_url']}", "Scan: #{link}"].reject(&:empty?).join("\n\n"),
+  body = { "From" => POSTMARK_FROM, "To" => NOTIFY_EMAIL, "Subject" => "BOLA Detector · #{name}: #{subject}",
+           "TextBody" => [subject, details, "Repo: #{scan['repo_url']}", "Scan: #{link}", "— BOLA Detector, by Variablee"].reject(&:empty?).join("\n\n"),
            "MessageStream" => "outbound" }
   Thread.new do
     res = Net::HTTP.post(URI("https://api.postmarkapp.com/email"), JSON.dump(body),
@@ -279,7 +279,8 @@ def analyze(id)
   r = JSON.parse(File.read("#{report}.json"))
   findings = r["routes"].map { |f| f.slice(*FINDING_KEYS) }
   verdicts = findings.map { |f| f["verdict"] }.tally
-  update(id, "status" => "done", "findings" => findings, "model" => r["model"], "verdicts" => verdicts,
+  top_finding = findings.find { |f| %w[likely possible].include?(f["verdict"]) }&.slice("route", "score", "verdict")
+  update(id, "status" => "done", "findings" => findings, "model" => r["model"], "verdicts" => verdicts, "top_finding" => top_finding,
              "analysis_finished_at" => Time.now.utc)
   TRACES.delete_one(_id: id)
   top = findings.select { |f| %w[likely possible].include?(f["verdict"]) }.first(10)
@@ -359,7 +360,7 @@ helpers do
 end
 
 get "/" do
-  @scans = SCANS.find.sort(created_at: -1).limit(12).projection(log: 0, tree: 0, routes: 0, findings: 0, events: 0).to_a
+  @scans = SCANS.find.sort(created_at: -1).limit(15).projection(log: 0, tree: 0, routes: 0, findings: 0, events: 0).to_a
   @error = params[:error]
   @analysis_off = analysis_off_reason
   erb :index
@@ -407,6 +408,7 @@ get "/scans" do
   @scans = SCANS.find.sort(created_at: -1).skip((@page - 1) * 50).limit(50)
                 .projection(log: 0, tree: 0, routes: 0, findings: 0, events: 0).to_a
   @pages = [(@total / 50.0).ceil, 1].max
+  @title = "All scans"
   erb :scans
 end
 
@@ -420,6 +422,7 @@ get "/scans/:id" do
   @scan = SCANS.find(_id: params[:id]).first or halt 404, "No such scan"
   @active = ACTIVE.include?(@scan["status"])
   @ahead = @scan["status"] == "queued" ? SCANS.count_documents(status: "queued", created_at: { "$lt" => @scan["created_at"] }) : 0
+  @title = repo_name(@scan["repo_url"]).first
   erb :scan
 end
 
@@ -432,7 +435,7 @@ __END__
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <% if @active %><meta http-equiv="refresh" content="3"><% end %>
-<title>Route Tracer</title>
+<title><%= @title ? "#{h @title} · " : '' %>BOLA Detector by Variablee</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -471,6 +474,7 @@ __END__
   .hero-inner { position: relative; z-index: 1; max-width: 1040px; margin: 0 auto; }
   .brand { display: inline-flex; align-items: center; gap: 10px; color: #fff; font-weight: 700; letter-spacing: .02em; }
   .brand:hover { text-decoration: none; opacity: .9; }
+  .brand .by { font-weight: 500; opacity: .8; margin-left: 4px; }
   .brand .logo { width: 34px; height: 34px; border-radius: 10px; background: rgba(255,255,255,.2); display: grid; place-items: center;
                  backdrop-filter: blur(6px); font-size: 18px; }
   .hero h1 { font-size: clamp(34px, 6vw, 58px); line-height: 1.05; margin: 28px 0 12px; font-weight: 800; letter-spacing: -.02em;
@@ -556,11 +560,8 @@ __END__
   .hero .pill { background: rgba(255,255,255,.22); color: #fff; }
   .pill-done { background: var(--green-bg); color: var(--green); } .pill-failed { background: var(--red-bg); color: var(--red); }
   .pill-cloning, .pill-tracing, .pill-analyzing, .pill-queued { background: var(--amber-bg); color: var(--amber); }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
-  .scan-card { display: block; color: inherit; margin: 0; transition: transform .15s, box-shadow .15s; }
-  .scan-card:hover { text-decoration: none; transform: translateY(-2px); }
-  .scan-card .name { font-weight: 700; word-break: break-word; } .scan-card .host { color: var(--muted); font-size: 12px; }
-  .scan-card .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; }
+  table.scans td { vertical-align: middle; } .summary .top { margin-top: 4px; font-size: 13px; word-break: break-all; }
+  .nowrap { white-space: nowrap; }
   .how { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
   .how .card { margin: 0; } .how .num { font-size: 24px; } .how h3 { margin: 6px 0 4px; font-size: 16px; } .how p { margin: 0; color: var(--muted); font-size: 14px; }
   .section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
@@ -585,7 +586,7 @@ __END__
 </head>
 <body>
 <%= yield %>
-<footer>Route Tracer · finds BOLA / IDOR candidates from a static trace. Scores are a triage order for manual review, not proof.</footer>
+<footer>BOLA Detector, by Variablee · finds BOLA / IDOR candidates from a static trace of the code. Scores are a triage order for manual review, not proof.</footer>
 </body>
 </html>
 
@@ -599,12 +600,12 @@ __END__
 <header class="hero">
   <%= erb :confetti, layout: false %>
   <div class="hero-inner">
-    <a class="brand" href="/"><span class="logo">🎯</span> Route Tracer</a>
+    <%= erb :brand, layout: false %>
     <h1>Find the routes that leak<br>other users' data <span class="spark">✨</span></h1>
-    <p class="lead">Paste a public repo. We trace every HTTP route through its filters and handlers, then an LLM flags the ones
-      that load objects by ID without checking who owns them (BOLA / IDOR).</p>
+    <p class="lead">BOLA Detector traces every HTTP route in a public repo through its filters and handlers, then an LLM flags
+      the ones that load objects by ID without checking who owns them (BOLA / IDOR).</p>
     <form class="scan-form" method="post" action="/scans">
-      <input name="repo_url" type="url" required placeholder="https://github.com/owner/repo" autofocus aria-label="Repo URL">
+      <input name="repo_url" type="url" required placeholder="https://github.com/owner/repo.git" autofocus aria-label="Repo URL">
       <button type="submit">Scan it 🚀</button>
     </form>
     <% if @error %><p class="error"><%= h @error %></p><% end %>
@@ -620,25 +621,7 @@ __END__
   </div>
 
   <div class="section-head"><h2>Recent scans</h2><a href="/scans">See all scans →</a></div>
-  <% if @scans.empty? %>
-    <div class="card muted">No scans yet. Be the first! 🎉</div>
-  <% else %>
-  <div class="grid">
-    <% @scans.each do |s| name, host = repo_name(s['repo_url']); v = s['verdicts'] || {} %>
-    <a class="card scan-card" href="/scans/<%= h s['_id'] %>">
-      <div class="name"><%= h name %></div>
-      <div class="host"><%= h host %></div>
-      <div class="row">
-        <span><%= status_pill s['status'] %>
-          <% if v['likely'].to_i.positive? %> <span class="verdict likely"><%= v['likely'] %> likely</span><% end %>
-          <% if v['possible'].to_i.positive? %> <span class="verdict possible"><%= v['possible'] %> possible</span><% end %>
-        </span>
-        <span class="muted"><%= when_s s['created_at'] %></span>
-      </div>
-    </a>
-    <% end %>
-  </div>
-  <% end %>
+  <div class="card"><%= erb :scan_table, layout: false %></div>
 </main>
 
 @@ scan
@@ -649,7 +632,7 @@ __END__
 <header class="hero compact">
   <%= erb :confetti, layout: false %>
   <div class="hero-inner">
-    <a class="brand" href="/"><span class="logo">🎯</span> Route Tracer</a>
+    <%= erb :brand, layout: false %>
     <div class="repo-title"><a href="<%= h s['repo_url'] %>"><%= h name %></a></div>
     <div class="meta">
       <%= status_pill s['status'] %>
@@ -820,39 +803,13 @@ __END__
 <header class="hero compact">
   <%= erb :confetti, layout: false %>
   <div class="hero-inner">
-    <a class="brand" href="/"><span class="logo">🎯</span> Route Tracer</a>
+    <%= erb :brand, layout: false %>
     <div class="repo-title">All scans</div>
     <div class="meta"><span><%= @total %> scans so far</span><a href="/">Start a new scan</a></div>
   </div>
 </header>
 <main>
-  <div class="card">
-  <% if @scans.empty? %>
-    <p class="muted" style="margin:0">No scans yet. <a href="/">Be the first!</a> 🎉</p>
-  <% else %>
-    <div class="table-wrap"><table>
-      <tr><th>Repo</th><th>Status</th><th>Routes</th><th>Results</th><th>Started</th><th>Took</th></tr>
-      <% @scans.each do |s| name, host = repo_name(s['repo_url']); v = s['verdicts'] %>
-      <tr>
-        <td><a href="/scans/<%= h s['_id'] %>"><b><%= h name %></b></a><br><span class="muted"><%= h host %></span></td>
-        <td><%= status_pill s['status'] %></td>
-        <td><%= s['route_count'] || '' %></td>
-        <td>
-          <% if v %>
-            <span class="verdict likely"><%= v['likely'].to_i %> likely</span>
-            <span class="verdict possible"><%= v['possible'].to_i %> possible</span>
-            <span class="verdict unlikely"><%= v['unlikely'].to_i %> fine</span>
-          <% elsif s['status'] == 'traced' %><a href="/scans/<%= h s['_id'] %>">Run the analysis →</a>
-          <% elsif s['status'] == 'failed' %><span class="muted"><%= h s['error'].to_s[0, 80] %></span>
-          <% else %><span class="muted">—</span><% end %>
-        </td>
-        <td class="muted"><%= when_s s['created_at'] %></td>
-        <td class="muted"><%= took s %><% if s['analysis_started_at'] %> + <%= analysis_took s %><% end %></td>
-      </tr>
-      <% end %>
-    </table></div>
-  <% end %>
-  </div>
+  <div class="card"><%= erb :scan_table, layout: false %></div>
   <% if @pages > 1 %>
   <div class="pager">
     <% if @page > 1 %><a href="/scans?page=<%= @page - 1 %>">← Newer</a><% end %>
@@ -861,3 +818,41 @@ __END__
   </div>
   <% end %>
 </main>
+
+@@ brand
+<a class="brand" href="/"><span class="logo">🎯</span><span>BOLA Detector <span class="by">by Variablee</span></span></a>
+
+@@ scan_table
+<% if @scans.empty? %>
+  <p class="muted" style="margin:0">No scans yet. Be the first! 🎉</p>
+<% else %>
+<div class="table-wrap"><table class="scans">
+  <tr><th>Repo</th><th>Status</th><th>Results</th><th>Started</th><th>Took</th></tr>
+  <% @scans.each do |s| name, host = repo_name(s['repo_url']); v = s['verdicts']; n = s['route_count']; link = "/scans/#{h s['_id']}" %>
+  <tr>
+    <td><a href="<%= link %>"><b><%= h name %></b></a><br><span class="muted"><%= h host %></span></td>
+    <td><%= status_pill s['status'] %></td>
+    <td class="summary">
+      <% if v %>
+        <span class="verdict likely"><%= v['likely'].to_i %> likely</span>
+        <span class="verdict possible"><%= v['possible'].to_i %> possible</span>
+        <span class="verdict unlikely"><%= v['unlikely'].to_i %> fine</span>
+        <% if n %><span class="muted">of <%= n %> routes</span><% end %>
+        <% if (t = s['top_finding']) %><div class="top">Top: <code><%= h t['route'] %></code> <span class="muted">(score <%= h t['score'] %>)</span></div>
+        <% elsif v['likely'].to_i + v['possible'].to_i == 0 %><div class="top">🎉 Nothing flagged</div><% end %>
+      <% elsif s['status'] == 'traced' %>
+        <%= n %> routes traced · <a href="<%= link %>">Run the analysis →</a>
+      <% elsif s['status'] == 'done' %>
+        <%= n || 'Some' %> routes traced <span class="muted">· no LLM analysis</span>
+      <% elsif s['status'] == 'failed' %>
+        <span class="muted"><%= h s['error'].to_s[0, 90] %></span>
+      <% else %>
+        <span class="muted"><%= n ? "#{n} routes traced, analyzing…" : 'In progress…' %></span>
+      <% end %>
+    </td>
+    <td class="muted nowrap"><%= when_s s['created_at'] %></td>
+    <td class="muted nowrap"><%= took s %><% if s['analysis_started_at'] %> + <%= analysis_took s %><% end %></td>
+  </tr>
+  <% end %>
+</table></div>
+<% end %>
