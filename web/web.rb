@@ -655,6 +655,23 @@ __END__
   .proof { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
   .proof .stat span { display: block; margin-top: 4px; }
   .proof-note { font-size: 13px; margin: 10px 0 16px; }
+.about-head { margin-top: 44px; }
+.showcase { margin-top: 40px; display: grid; gap: 48px; }
+.feature { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 28px; align-items: center; }
+.feature.flip .text { order: 2; }
+.feature .kicker, .author .kicker { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.feature h2 { margin: 6px 0 10px; font-size: 24px; line-height: 1.2; }
+.feature p { margin: 0; color: var(--muted); }
+.shot { display: block; border-radius: 16px; overflow: hidden; box-shadow: 0 12px 40px rgba(25,23,43,.18); border: 1px solid var(--line);
+        background: #0f1720; transition: transform .2s; }
+.shot:hover { transform: translateY(-3px); }
+.shot img { display: block; width: 100%; height: auto; }
+.shot.tall img { max-height: 520px; object-fit: cover; object-position: top; }
+@media (max-width: 760px) { .feature { grid-template-columns: 1fr; gap: 16px; } .feature.flip .text { order: 0; } }
+.author { display: flex; gap: 18px; align-items: center; color: inherit; }
+.author:hover { text-decoration: none; border-color: var(--accent); }
+.author img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; flex: none; }
+.author b { display: block; font-size: 18px; margin: 2px 0; } .author span { color: var(--muted); font-size: 14px; }
   .slice { margin-top: 12px; } .slice h3 { margin: 0 0 4px; }
   .slice-lines { margin: 10px 0; padding: 12px 14px; border-radius: 10px; background: var(--surface-2); }
   .slice-lines .ln { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 3px 0; }
@@ -819,36 +836,11 @@ __END__
   </div>
 </header>
 <main>
-  <div class="proof">
-    <div class="stat red"><b>96%</b><span>of known BOLAs caught (24 of 25) on our benchmark</span></div>
-    <div class="stat green"><b>1 / 28</b><span>false positives on routes known to be safe</span></div>
-    <div class="stat"><b>4</b><span>real-world apps with published BOLAs, from CVEs to OWASP targets</span></div>
-    <div class="stat"><b>9</b><span>frameworks across Ruby, Python and JavaScript / TypeScript</span></div>
-  </div>
-  <p class="muted proof-note">Benchmark: OWASP RailsGoat, OWASP crAPI, dvws-node and aegra (CVE-2026-44504).
-    <a href="<%= LINKS[:github] %>#benchmarks-and-up-to-date-test-results" target="_blank" rel="noopener">See the full results →</a></p>
-
-  <div class="how">
-    <div class="card"><div class="num">🧩</div><h3>1. Parse</h3><p>Indexes every method and class across Ruby, Python and JS / TS, and finds every route in Rails, Django, FastAPI, Express, NestJS and more.</p></div>
-    <div class="card"><div class="num">✂️</div><h3>2. Slice</h3><p>Follows each route through its auth filters, middleware and guards into the handler and the calls that read or write data, and packs that path into its own context slice.</p></div>
-    <div class="card"><div class="num">🧠</div><h3>3. Reason</h3>
-      <p><% if @analysis_off %>Off on this server: <%= h @analysis_off %>.<% else %>A frontier model reviews each slice on its own: is the requested object tied to the current user? Every flag comes with evidence and a fix.<% end %></p></div>
-  </div>
-
-  <div class="card slice">
-    <h3>One route, one slice</h3>
-    <p class="muted">Only the code that runs for this request goes to the model, in the order it runs:</p>
-<div class="slice-lines">
-      <div class="ln l0"><code>GET /orders/:id → OrdersController#show</code><span class="tag">route</span></div>
-      <div class="ln l1"><code>ApplicationController#authenticate_user!</code><span class="tag">auth filter</span></div>
-      <div class="ln l1"><code>OrdersController#show</code><span class="tag">handler</span></div>
-      <div class="ln l2"><code>Order.find(params[:id])</code><span class="tag red">data access, not scoped to current_user</span></div>
-    </div>
-    <p class="muted" style="margin-bottom:0">Because each slice is small and self-contained, the codebase's size doesn't limit the review: every route gets the model's full attention.</p>
-  </div>
-
   <div class="section-head"><h2><%= admin? ? "Recent scans · all users" : "Your recent scans" %></h2><a href="/scans"><%= admin? ? "See all scans →" : "See all your scans →" %></a></div>
   <div class="card"><%= erb :scan_table, layout: false %></div>
+
+  <h2 class="about-head">How BOLA Detector works</h2>
+  <%= erb :about, layout: false %>
 </main>
 
 @@ scan
@@ -1127,7 +1119,9 @@ __END__
     <%= erb :resource_links, layout: false %>
   </div>
 </header>
-<main style="margin-top:24px"></main>
+<main>
+  <%= erb :about, layout: false %>
+</main>
 
 @@ legal
 <header class="hero compact">
@@ -1149,3 +1143,89 @@ __END__
   <a href="<%= LINKS[:github] %>" target="_blank" rel="noopener">⭐ GitHub</a>
   <a href="<%= LINKS[:variablee] %>" target="_blank" rel="noopener">🌐 variablee.com</a>
 </div>
+
+@@ about
+  <div class="proof">
+    <div class="stat red"><b>96%</b><span>of known BOLAs caught (24 of 25) on our benchmark</span></div>
+    <div class="stat green"><b>1 / 28</b><span>false positives on routes known to be safe</span></div>
+    <div class="stat"><b>4</b><span>real-world apps with published BOLAs, from CVEs to OWASP targets</span></div>
+    <div class="stat"><b>9</b><span>frameworks across Ruby, Python and JavaScript / TypeScript</span></div>
+  </div>
+  <p class="muted proof-note">Benchmark: OWASP RailsGoat, OWASP crAPI, dvws-node and aegra (CVE-2026-44504).
+    <a href="<%= LINKS[:github] %>#benchmarks-and-up-to-date-test-results" target="_blank" rel="noopener">See the full results →</a></p>
+
+  <div class="how">
+    <div class="card"><div class="num">🧩</div><h3>1. Parse</h3><p>Indexes every method and class across Ruby, Python and JS / TS, and finds every route in Rails, Django, FastAPI, Express, NestJS and more.</p></div>
+    <div class="card"><div class="num">✂️</div><h3>2. Slice</h3><p>Follows each route through its auth filters, middleware and guards into the handler and the calls that read or write data, and packs that path into its own context slice.</p></div>
+    <div class="card"><div class="num">🧠</div><h3>3. Reason</h3>
+      <p><% if @analysis_off %>Off on this server: <%= h @analysis_off %>.<% else %>A frontier model reviews each slice on its own: is the requested object tied to the current user? Every flag comes with evidence and a fix.<% end %></p></div>
+  </div>
+
+  <div class="card slice">
+    <h3>One route, one slice</h3>
+    <p class="muted">Only the code that runs for this request goes to the model, in the order it runs:</p>
+<div class="slice-lines">
+      <div class="ln l0"><code>GET /orders/:id → OrdersController#show</code><span class="tag">route</span></div>
+      <div class="ln l1"><code>ApplicationController#authenticate_user!</code><span class="tag">auth filter</span></div>
+      <div class="ln l1"><code>OrdersController#show</code><span class="tag">handler</span></div>
+      <div class="ln l2"><code>Order.find(params[:id])</code><span class="tag red">data access, not scoped to current_user</span></div>
+    </div>
+    <p class="muted" style="margin-bottom:0">Because each slice is small and self-contained, the codebase's size doesn't limit the review: every route gets the model's full attention.</p>
+  </div>
+
+<section class="showcase">
+  <div class="feature">
+    <div class="text">
+      <div class="kicker">The bug class</div>
+      <h2>One ID swap away from someone else's data</h2>
+      <p>A signed-in user changes an ID in the URL and gets another customer's invoice, order or account. Nothing crashes and
+         no pattern matches: the bug is a permission check that isn't there. That's BOLA / IDOR, the #1 risk in the OWASP API
+         Security Top 10.</p>
+    </div>
+    <a class="shot" href="/img/blog/bolaimg1.svg" target="_blank"><img src="/img/blog/bolaimg1.svg" width="960" height="510" loading="lazy"
+       alt="Diagram: a caller-controlled invoice ID flows from the request through the controller and an ID-only lookup to the response, with no object-level permission check"></a>
+  </div>
+
+  <div class="feature flip">
+    <div class="text">
+      <div class="kicker">Our method</div>
+      <h2>One route at a time</h2>
+      <p>We inventory every route, collect the shared middleware and the handler code that governs the object ID, and review
+         access for that route alone. Then the next route, until the whole inventory is covered.</p>
+    </div>
+    <a class="shot" href="/img/blog/bola2.png" target="_blank"><img src="/img/blog/bola2.png" width="960" height="530" loading="lazy"
+       alt="Three steps: inventory routes, collect route context (shared middleware, handler and calls), review access and flag a possible BOLA"></a>
+  </div>
+
+  <div class="feature">
+    <div class="text">
+      <div class="kicker">Under the hood</div>
+      <h2>A real context slice</h2>
+      <p>This is the actual trace for one route: the handler, every call it makes with its file and lines, and the source of
+         each filter on the way. That slice, and nothing else, is what the model reviews, so a large codebase never
+         crowds out the code that matters.</p>
+    </div>
+    <a class="shot tall" href="/img/blog/example_from_trace.png" target="_blank"><img src="/img/blog/example_from_trace.png" width="1212" height="1532" loading="lazy"
+       alt="JSON trace of GET /admin/users/:id: its handler, the calls it makes with file and line ranges, and the source of its before filter"></a>
+  </div>
+
+  <div class="feature flip">
+    <div class="text">
+      <div class="kicker">What you get</div>
+      <h2>Findings you can triage</h2>
+      <p>Each candidate names the auth it passed, the check that's missing, nearby checks that hint at intent, and a concrete
+         next step to confirm it, so your team spends time on real issues.</p>
+    </div>
+    <a class="shot" href="/img/blog/bola3.png" target="_blank"><img src="/img/blog/bola3.png" width="1920" height="1299" loading="lazy"
+       alt="Illustrative scan output: three candidate BOLA findings, each with shared auth, the missing or unclear check, a nearby check, and a next step"></a>
+  </div>
+
+  <a class="card author" href="<%= LINKS[:blog] %>" target="_blank" rel="noopener">
+    <img src="/img/blog/tux1.jpeg" width="800" height="800" loading="lazy" alt="Sella Rafaeli">
+    <div>
+      <div class="kicker">From the lab</div>
+      <b>AI-native SAST for IDOR / BOLA</b>
+      <span>How we built BOLA Detector, by Sella Rafaeli · Read the blog post →</span>
+    </div>
+  </a>
+</section>
