@@ -23,6 +23,7 @@
 #   POSTMARK_FROM      sender address, a verified Postmark sender signature (default NOTIFY_EMAIL)
 #   GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET   with both set, every page needs a Google sign-in
 #   SESSION_SECRET     signs the sign-in cookie; ALLOWED_DOMAINS / ALLOWED_EMAILS limit who may sign in
+#   ADMIN_EMAILS       see every user's scans (default sella.rafaeli@gmail.com); everyone else sees only their own
 #   ALLOWED_GIT_HOSTS  comma-separated hosts users may clone from (default github.com,gitlab.com,bitbucket.org;
 #                      `*` allows any https host)
 #   MAX_REPO_MB        refuse repos bigger than this after cloning (default 500)
@@ -339,7 +340,12 @@ AUTH_ON              = !GOOGLE_CLIENT_ID.empty? && !GOOGLE_CLIENT_SECRET.empty?
 ALLOWED_EMAILS       = ENV["ALLOWED_EMAILS"].to_s.downcase.split(",").map(&:strip).reject(&:empty?)
 ALLOWED_DOMAINS      = ENV["ALLOWED_DOMAINS"].to_s.downcase.split(",").map(&:strip).reject(&:empty?)
 USERS                = DB[:users] # one document per person who signed in
-PUBLIC_PATHS         = %w[/login /logout /auth/google /auth/google/callback /privacy /tos /terms].freeze
+# Admins see every user's scans; everyone else sees only their own.
+ADMIN_EMAILS         = ENV.fetch("ADMIN_EMAILS", "sella.rafaeli@gmail.com").downcase.split(",").map(&:strip).reject(&:empty?)
+SCANS.indexes.create_one("requested_by.email" => 1, created_at: -1)
+PUBLIC_PATHS         = %w[/login /logout /auth/google /auth/google/callback /privacy /tos /terms /whitepaper].freeze
+LINKS = { whitepaper: "/whitepaper", blog: "https://sellarafaeli.com/blog/ai_native_sast_for_idor_bola",
+          github: "https://github.com/sellarafaeli/ai_sast", variablee: "https://variablee.com" }.freeze
 if AUTH_ON
   warn "[auth] Google sign-in is ON#{ALLOWED_DOMAINS.any? || ALLOWED_EMAILS.any? ? " (only #{(ALLOWED_DOMAINS + ALLOWED_EMAILS).join(', ')})" : ''}"
 else
@@ -388,6 +394,10 @@ LEGAL = {
     ["Sharing", "Repository code is sent to an AI model provider to analyze it. We don't sell your data."],
     ["Contact", "Contact details will be added here."]
   ]],
+  "whitepaper" => ["White paper", [
+    ["Coming soon", "The BOLA Detector white paper covers how the engine maps routes across very large code bases, how frontier models reason about object-level authorization, and our benchmark against real applications with known BOLA / IDOR vulnerabilities."],
+    ["In the meantime", "Read the blog post and the open-source project on GitHub, linked at the bottom of this page."]
+  ]],
   "tos" => ["Terms of Service", [
     ["Using BOLA Detector", "Only scan repositories you're allowed to analyze. Results are automated estimates from a static trace of the code, for manual review; they aren't proof that a bug exists or doesn't."],
     ["No warranty", "The service is provided as is, without any warranty."],
@@ -395,7 +405,7 @@ LEGAL = {
   ]]
 }.freeze
 
-%w[privacy tos terms].each do |page|
+%w[privacy tos terms whitepaper].each do |page|
   get "/#{page}" do
     @title, @sections = LEGAL.fetch(page == "terms" ? "tos" : page)
     erb :legal
@@ -452,6 +462,13 @@ helpers do
 
   # The signed-in Google user ({ email, name, picture }), or nil when sign-in is off.
   def current_user = session[:user]
+  def admin? = !AUTH_ON || ADMIN_EMAILS.include?(current_user&.dig("email").to_s) # sign-in off (local dev): everyone sees all
+
+  # The Mongo filter for the scans this visitor may see.
+  def visible_scans = admin? ? {} : { "requested_by.email" => current_user&.dig("email").to_s }
+
+  # One scan, or 404 when it doesn't exist or isn't theirs (404, not 403, so ids of other people's scans don't leak).
+  def find_scan!(id) = SCANS.find(visible_scans.merge(_id: id.to_s)).first || halt(404, "No such scan")
   def who(user = current_user) = user ? "#{user['name']} (#{user['email']})" : "Someone (anonymous)"
   def user_name(user) = user ? (user["name"] || user["email"]) : "anonymous"
   def when_s(t) = t ? t.utc.strftime("%b %-d, %H:%M UTC") : ""
@@ -491,7 +508,7 @@ helpers do
 end
 
 get "/" do
-  @scans = SCANS.find.sort(created_at: -1).limit(15).projection(log: 0, tree: 0, routes: 0, findings: 0, events: 0).to_a
+  @scans = SCANS.find(visible_scans).sort(created_at: -1).limit(15).projection(log: 0, tree: 0, routes: 0, findings: 0, events: 0).to_a
   @error = params[:error]
   @analysis_off = analysis_off_reason
   erb :index
@@ -504,7 +521,7 @@ post "/scans" do
     redirect to("/?error=" + Rack::Utils.escape("Enter a public https repo URL, like https://github.com/owner/repo (allowed: #{hosts})"))
   end
   # Same repo already waiting or running: show that scan instead of starting another.
-  if (existing = SCANS.find(repo_url: url, status: { "$in" => ACTIVE }).first)
+  if (existing = SCANS.find(visible_scans.merge(repo_url: url, status: { "$in" => ACTIVE })).first)
     redirect to("/scans/#{existing['_id']}")
   end
   if JOBS.size >= MAX_QUEUE
@@ -521,7 +538,7 @@ end
 
 # The second button: run the LLM analysis on a finished trace.
 post "/scans/:id/analyze" do
-  scan = SCANS.find(_id: params[:id]).first or halt 404, "No such scan"
+  scan = find_scan!(params[:id])
   if scan["status"] == "traced" && !analysis_off_reason && JOBS.size < MAX_QUEUE
     # Only one click wins: the update matches only while the scan is still "traced".
     res = SCANS.update_one({ _id: scan["_id"], status: "traced" },
@@ -538,22 +555,22 @@ end
 # Every scan, newest first, 50 per page.
 get "/scans" do
   @page = [params[:page].to_i, 1].max
-  @total = SCANS.count_documents({})
-  @scans = SCANS.find.sort(created_at: -1).skip((@page - 1) * 50).limit(50)
+  @total = SCANS.count_documents(visible_scans)
+  @scans = SCANS.find(visible_scans).sort(created_at: -1).skip((@page - 1) * 50).limit(50)
                 .projection(log: 0, tree: 0, routes: 0, findings: 0, events: 0).to_a
   @pages = [(@total / 50.0).ceil, 1].max
-  @title = "All scans"
+  @title = admin? ? "All scans" : "My scans"
   erb :scans
 end
 
 get "/scans/:id.json" do
-  scan = SCANS.find(_id: params[:id]).first or halt 404
+  scan = find_scan!(params[:id])
   content_type :json
   JSON.pretty_generate(scan)
 end
 
 get "/scans/:id" do
-  @scan = SCANS.find(_id: params[:id]).first or halt 404, "No such scan"
+  @scan = find_scan!(params[:id])
   @active = ACTIVE.include?(@scan["status"])
   @ahead = @scan["status"] == "queued" ? SCANS.count_documents(status: "queued", created_at: { "$lt" => @scan["created_at"] }) : 0
   @title = repo_name(@scan["repo_url"]).first
@@ -569,7 +586,7 @@ __END__
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <% if @active %><meta http-equiv="refresh" content="3"><% end %>
-<title><%= @title ? "#{h @title} · " : '' %>BOLA Detector by Variablee</title>
+<title><%= @title ? "#{h @title} · " : '' %>BOLA Detector by Variablee · Frontier AI for BOLA / IDOR</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -625,6 +642,26 @@ __END__
   .legal h1 { font-size: 30px; margin: 0 0 4px; } .legal h2 { margin-top: 28px; font-size: 18px; }
   .legal .placeholder { padding: 10px 14px; border-radius: 10px; background: var(--amber-bg); color: var(--amber); font-weight: 600; }
   footer a { color: var(--muted); text-decoration: underline; }
+  .foot-links { margin-bottom: 6px; font-weight: 500; }
+  .eyebrow { display: inline-block; margin-top: 28px; padding: 5px 12px; border-radius: 99px; font-size: 12px; font-weight: 700;
+             letter-spacing: .08em; text-transform: uppercase; background: rgba(255,255,255,.18); }
+  .eyebrow + h1 { margin-top: 14px; }
+  .hero p.fine { margin: 10px 0 0; font-size: 13px; opacity: .9; }
+  .res-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+  .res-links a { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 10px; font-size: 14px;
+                 font-weight: 600; color: #fff; background: rgba(25,23,43,.35); border: 1px solid rgba(255,255,255,.25); }
+  .res-links a:hover { text-decoration: none; background: rgba(25,23,43,.5); }
+  .res-links .soon { font-size: 11px; opacity: .75; font-weight: 500; }
+  .proof { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .proof .stat span { display: block; margin-top: 4px; }
+  .proof-note { font-size: 13px; margin: 10px 0 16px; }
+  .slice { margin-top: 12px; } .slice h3 { margin: 0 0 4px; }
+  .slice-lines { margin: 10px 0; padding: 12px 14px; border-radius: 10px; background: var(--surface-2); }
+  .slice-lines .ln { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 3px 0; }
+  .slice-lines .ln code { word-break: break-all; }
+  .slice-lines .l1 { padding-left: 18px; } .slice-lines .l2 { padding-left: 36px; }
+  .slice .tag { display: inline-block; padding: 0 8px; border-radius: 99px; font-size: 11px; background: var(--surface); color: var(--muted); }
+  .slice .tag.red { background: var(--red-bg); color: var(--red); }
   .login-card { max-width: 440px; margin: 28px 0 0; padding: 28px; border-radius: 20px; background: rgba(255,255,255,.16);
                 backdrop-filter: blur(10px); box-shadow: 0 10px 40px rgba(0,0,0,.15); }
   .login-card p { margin: 0 0 18px; opacity: .95; }
@@ -743,8 +780,14 @@ __END__
 </head>
 <body>
 <%= yield %>
-<footer>BOLA Detector, by Variablee · finds BOLA / IDOR candidates from a static trace of the code. Scores are a triage order for manual review, not proof.
-<br><a href="/privacy">Privacy</a> · <a href="/tos">Terms</a></footer>
+<footer>
+  <div class="foot-links">
+    <a href="<%= LINKS[:whitepaper] %>">White paper</a> · <a href="<%= LINKS[:blog] %>" target="_blank" rel="noopener">Blog</a> ·
+    <a href="<%= LINKS[:github] %>" target="_blank" rel="noopener">GitHub</a> · <a href="<%= LINKS[:variablee] %>" target="_blank" rel="noopener">variablee.com</a> ·
+    <a href="/privacy">Privacy</a> · <a href="/tos">Terms</a>
+  </div>
+  © <%= Time.now.year %> Variablee · Frontier AI Security Lab. Findings are a triage order for expert review, not proof.
+</footer>
 </body>
 </html>
 
@@ -759,26 +802,52 @@ __END__
   <%= erb :confetti, layout: false %>
   <div class="hero-inner">
     <%= erb :brand, layout: false %>
-    <h1>Find the routes that leak <br>other users' data <span class="spark">✨</span></h1>
-    <p class="lead">BOLA Detector traces every HTTP route in a public repo through its filters and handlers, then an LLM flags
-      the ones that load objects by ID without checking who owns them (BOLA / IDOR).</p>
+    <div class="eyebrow">🧪 Variablee · Frontier AI Security Lab</div>
+    <h1>Vulnerability detection <br>for large enterprise codebases <span class="spark">✨</span></h1>
+    <p class="lead">BOLA Detector parses each HTTP route's execution path: the auth filters, middleware and guards that run
+      before it, the handler, and every call down to data access. That path becomes the route's own <b>context slice</b>,
+      and a frontier model reviews one slice at a time, so even a huge codebase gets a focused review of every endpoint
+      for Broken Object Level Authorization (BOLA / IDOR).</p>
     <form class="scan-form" method="post" action="/scans">
       <input name="repo_url" type="url" required placeholder="https://github.com/owner/repo.git" autofocus aria-label="Repo URL">
-      <button type="submit">Scan it 🚀</button>
+      <button type="submit">Scan free 🚀</button>
     </form>
+    <p class="fine">Free during research preview · public repos · results in minutes</p>
     <% if @error %><p class="error"><%= h @error %></p><% end %>
+    <%= erb :resource_links, layout: false %>
     <div class="chips"><% FRAMEWORKS.each do |f| %><span class="chip"><%= f %></span><% end %></div>
   </div>
 </header>
 <main>
+  <div class="proof">
+    <div class="stat red"><b>96%</b><span>of known BOLAs caught (24 of 25) on our benchmark</span></div>
+    <div class="stat green"><b>1 / 28</b><span>false positives on routes known to be safe</span></div>
+    <div class="stat"><b>4</b><span>real-world apps with published BOLAs, from CVEs to OWASP targets</span></div>
+    <div class="stat"><b>9</b><span>frameworks across Ruby, Python and JavaScript / TypeScript</span></div>
+  </div>
+  <p class="muted proof-note">Benchmark: OWASP RailsGoat, OWASP crAPI, dvws-node and aegra (CVE-2026-44504).
+    <a href="<%= LINKS[:github] %>#benchmarks-and-up-to-date-test-results" target="_blank" rel="noopener">See the full results →</a></p>
+
   <div class="how">
-    <div class="card"><div class="num">📥</div><h3>1. Clone</h3><p>A shallow copy of the repo's default branch. Public https repos only.</p></div>
-    <div class="card"><div class="num">🧭</div><h3>2. Trace</h3><p>Every route, the filters that run before it, and the code it calls.</p></div>
-    <div class="card"><div class="num">🔍</div><h3>3. Analyze</h3>
-      <p><% if @analysis_off %>Off on this server: <%= h @analysis_off %>.<% else %>An LLM scores each route for missing ownership checks.<% end %></p></div>
+    <div class="card"><div class="num">🧩</div><h3>1. Parse</h3><p>Indexes every method and class across Ruby, Python and JS / TS, and finds every route in Rails, Django, FastAPI, Express, NestJS and more.</p></div>
+    <div class="card"><div class="num">✂️</div><h3>2. Slice</h3><p>Follows each route through its auth filters, middleware and guards into the handler and the calls that read or write data, and packs that path into its own context slice.</p></div>
+    <div class="card"><div class="num">🧠</div><h3>3. Reason</h3>
+      <p><% if @analysis_off %>Off on this server: <%= h @analysis_off %>.<% else %>A frontier model reviews each slice on its own: is the requested object tied to the current user? Every flag comes with evidence and a fix.<% end %></p></div>
   </div>
 
-  <div class="section-head"><h2>Recent scans</h2><a href="/scans">See all scans →</a></div>
+  <div class="card slice">
+    <h3>One route, one slice</h3>
+    <p class="muted">Only the code that runs for this request goes to the model, in the order it runs:</p>
+<div class="slice-lines">
+      <div class="ln l0"><code>GET /orders/:id → OrdersController#show</code><span class="tag">route</span></div>
+      <div class="ln l1"><code>ApplicationController#authenticate_user!</code><span class="tag">auth filter</span></div>
+      <div class="ln l1"><code>OrdersController#show</code><span class="tag">handler</span></div>
+      <div class="ln l2"><code>Order.find(params[:id])</code><span class="tag red">data access, not scoped to current_user</span></div>
+    </div>
+    <p class="muted" style="margin-bottom:0">Because each slice is small and self-contained, the codebase's size doesn't limit the review: every route gets the model's full attention.</p>
+  </div>
+
+  <div class="section-head"><h2><%= admin? ? "Recent scans · all users" : "Your recent scans" %></h2><a href="/scans"><%= admin? ? "See all scans →" : "See all your scans →" %></a></div>
   <div class="card"><%= erb :scan_table, layout: false %></div>
 </main>
 
@@ -845,8 +914,8 @@ __END__
     <% if present?(s['analysis_error']) %><div class="notice bad">Last analysis attempt failed: <%= h s['analysis_error'] %></div><% end %>
     <form class="card cta" method="post" action="/scans/<%= h s['_id'] %>/analyze">
       <div class="text">
-        <h3>Trace done! Ready for the BOLA analysis 🔍</h3>
-        <p>An LLM reads each route's traced code and scores how likely it is to let one user reach another user's data.
+        <h3>Trace complete. Ready for frontier analysis 🧠</h3>
+        <p>Our frontier model reads each route's traced code and scores how likely it is to let one user reach another user's data.
            <%= s['route_count'] %> routes, about <%= llm_calls(s) %> LLM calls, usually a minute or two.</p>
       </div>
       <button type="submit">Run the analysis ✨</button>
@@ -964,8 +1033,12 @@ __END__
   <%= erb :confetti, layout: false %>
   <div class="hero-inner">
     <%= erb :brand, layout: false %>
-    <div class="repo-title">All scans</div>
-    <div class="meta"><span><%= @total %> scans so far</span><a href="/">Start a new scan</a></div>
+    <div class="repo-title"><%= admin? ? "All scans" : "My scans" %></div>
+    <div class="meta">
+      <span><%= @total %> <%= @total == 1 ? "scan" : "scans" %></span>
+      <% if admin? && AUTH_ON %><span class="pill">Admin view · every user's scans</span><% end %>
+      <a href="/">Start a new scan</a>
+    </div>
   </div>
 </header>
 <main>
@@ -981,7 +1054,7 @@ __END__
 
 @@ brand
 <div class="topbar">
-  <a class="brand" href="/"><span class="logo">🎯</span><span>BOLA Detector <span class="by">by sella.rafaeli @ Variablee</span></span></a>
+  <a class="brand" href="/"><span class="logo">🎯</span><span>AI Code Vuln Detector <span class="by">by Variablee · Frontier AI Security Lab</span></span></a>
   <% if current_user %>
   <div class="me">
     <% if current_user['picture'] %><img src="<%= h current_user['picture'] %>" alt="" referrerpolicy="no-referrer">
@@ -1000,14 +1073,14 @@ __END__
 
 @@ scan_table
 <% if @scans.empty? %>
-  <p class="muted" style="margin:0">No scans yet. Be the first! 🎉</p>
+  <p class="muted" style="margin:0">No scans yet. Paste a repo URL above to run your first one, free. 🚀</p>
 <% else %>
 <div class="table-wrap"><table class="scans">
-  <tr><th>Repo</th><th>By</th><th>Status</th><th>Results</th><th>Started</th><th>Took</th></tr>
+  <tr><th>Repo</th><% if admin? %><th>By</th><% end %><th>Status</th><th>Results</th><th>Started</th><th>Took</th></tr>
   <% @scans.each do |s| name, host = repo_name(s['repo_url']); v = s['verdicts']; n = s['route_count']; link = "/scans/#{h s['_id']}" %>
   <tr>
     <td><a href="<%= link %>"><b><%= h name %></b></a><br><span class="muted"><%= h host %></span></td>
-    <td class="by-user"><%= h user_name(s['requested_by']) %></td>
+    <% if admin? %><td class="by-user"><%= h user_name(s['requested_by']) %><% if s['requested_by'] %><br><span class="muted"><%= h s['requested_by']['email'] %></span><% end %></td><% end %>
     <td><%= status_pill s['status'] %></td>
     <td class="summary">
       <% if v %>
@@ -1039,15 +1112,19 @@ __END__
   <%= erb :confetti, layout: false %>
   <div class="hero-inner">
     <%= erb :brand, layout: false %>
-    <h1>Find the routes that leak <br>other users' data <span class="spark">✨</span></h1>
+    <div class="eyebrow">🧪 Variablee · Frontier AI Security Lab</div>
+    <h1>Vulnerability detection <br>for large enterprise codebases <span class="spark">✨</span></h1>
+    <p class="lead">Our patent-pending algorithm AI security MW for code parsing slices your app into routes with execution and auth logic, each in its own digestible context slice, allowing frontier models to review each route for vulnerabilities.</p>
+    <p class=lead>TLDR: Let us show you the vulnerabilities in your code.</p>
     <div class="login-card">
-      <p>Sign in with your Google account to scan repos and see results.</p>
+      <p><b>Try It On Your Repo.</b> Sign in with Google to run your first scan in minutes.</p>
       <a class="google-btn" href="/auth/google">
         <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
         Sign in with Google
       </a>
       <% if @error %><p class="error" style="margin:16px 0 0"><%= h @error %></p><% end %>
     </div>
+    <%= erb :resource_links, layout: false %>
   </div>
 </header>
 <main style="margin-top:24px"></main>
@@ -1060,7 +1137,15 @@ __END__
 <main>
   <div class="card legal">
     <p class="placeholder">Placeholder text: this page will be replaced with the final <%= h @title.downcase %>.</p>
-    <p class="muted">BOLA Detector, by Variablee · Last updated <%= Time.now.utc.strftime("%B %-d, %Y") %></p>
+    <p class="muted">AI Code Vuln Detector by Variablee · Last updated <%= Time.now.utc.strftime("%B %-d, %Y") %></p>
     <% @sections.each do |heading, text| %><h2><%= h heading %></h2><p><%= h text %></p><% end %>
   </div>
 </main>
+
+@@ resource_links
+<div class="res-links">
+  <a href="<%= LINKS[:whitepaper] %>">📄 See the white paper <span class="soon">soon</span></a>
+  <a href="<%= LINKS[:blog] %>" target="_blank" rel="noopener">✍️ Read the blog post</a>
+  <a href="<%= LINKS[:github] %>" target="_blank" rel="noopener">⭐ GitHub</a>
+  <a href="<%= LINKS[:variablee] %>" target="_blank" rel="noopener">🌐 variablee.com</a>
+</div>

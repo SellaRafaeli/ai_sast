@@ -4,10 +4,13 @@ BOLA Detector is the web page for `route_tracer.rb`. Anyone can paste a public r
 
 | Page | What it shows |
 |---|---|
-| `/` | The scan form and the 12 latest scans |
-| `/scans` | Every scan with its status, route count and results, 50 per page |
+| `/` | The scan form, benchmark numbers, links, and your 15 latest scans |
+| `/scans` | Your scans with status, route count and results, 50 per page (admins: everyone's, with who ran each) |
 | `/scans/<id>` | One scan: progress, the **Run the analysis** button, flagged routes with fixes, all traced routes, call trees, a timeline of what happened, and the log |
 | `/scans/<id>.json` | One scan's full document |
+| `/privacy`, `/tos`, `/whitepaper` | Placeholder pages, open without signing in |
+
+Signed-in users see and open only their own scans; someone else's scan is a 404. Admins (`ADMIN_EMAILS`) see everyone's. With sign-in off, everyone sees every scan.
 
 Everything for the server is in [`web.rb`](web.rb): routes, background worker and HTML templates. It runs `../route_tracer.rb` and then `../analyze_bola.rb` as child processes, so the scripts stay unchanged and still work from the command line.
 
@@ -24,10 +27,10 @@ npm install
 ```
 
 ```bash
-bundle exec ruby web/web.rb
+web/dev
 ```
 
-Open http://localhost:4567. By default it uses `mongodb://127.0.0.1:27017/route_tracer`. To use another database:
+Open http://localhost:4567. `web/dev` restarts the server by itself whenever `web/web.rb`, `llm.rb` or `.env` changes, so edits show up on the next page load. Changes to `route_tracer.rb` and `analyze_bola.rb` need no restart: each scan runs them fresh. A restart stops a trace in progress (start that scan again); an interrupted analysis goes back to "Ready to analyze". To run without auto-restart, use `bundle exec ruby web/web.rb`. By default it uses `mongodb://127.0.0.1:27017/route_tracer`. To use another database:
 
 ```bash
 MONGODB_URI=mongodb://127.0.0.1:27017/my_db bundle exec ruby web/web.rb
@@ -40,7 +43,7 @@ The files Heroku needs are at the repo root, because Heroku only looks there:
 | File | Why |
 |---|---|
 | `Gemfile`, `Gemfile.lock` | Ruby version and the server's gems |
-| `Procfile` | Start command: `bundle exec ruby web/web.rb` |
+| `Procfile` | Start command: `bundle exec ruby web/web.rb` (no auto-restart on Heroku; `web/dev` is for local use) |
 | `package.json` | Installs TypeScript, used to parse JS/TS repos |
 | `requirements.txt` | Empty. It makes Heroku add Python, needed to parse Python repos |
 | `app.json` | Buildpacks and settings, for one-click deploys |
@@ -145,6 +148,7 @@ Changes can take a few minutes to apply. A `redirect_uri_mismatch` error from Go
 | `SESSION_SECRET` | Signs the sign-in cookie. Without it, everyone is signed out on each restart. | random |
 | `ALLOWED_DOMAINS` | Only Google accounts with these email domains may sign in, comma-separated | any |
 | `ALLOWED_EMAILS` | Only these Google accounts may sign in, comma-separated (combined with `ALLOWED_DOMAINS`) | any |
+| `ADMIN_EMAILS` | These accounts see every user's scans, comma-separated | `sella.rafaeli@gmail.com` |
 | `MAX_REPO_MB` | Refuse repos bigger than this after cloning | `500` |
 | `MAX_QUEUE` | Refuse new scans when this many are waiting | `10` |
 

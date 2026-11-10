@@ -9,3 +9,8 @@ gem "rackup"
 gem "puma"
 gem "mongo", "~> 2.20.0" # 2.21+ needs MongoDB 4.4+; 2.20 works with older local servers and current hosted ones
 gem "bigdecimal" # the mongo gem uses it; Ruby 4.0 no longer loads it without the Gemfile
+
+# Local only (Heroku skips this group): web/dev restarts the server when web.rb, llm.rb or .env change.
+group :development do
+  gem "rerun"
+end

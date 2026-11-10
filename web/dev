@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Run the web server locally and restart it whenever web/web.rb, llm.rb or .env changes.
+#   web/dev              # http://localhost:4567
+#   PORT=4600 web/dev    # another port
+# route_tracer.rb and analyze_bola.rb need no restart: each scan runs them fresh.
+# A restart stops a trace that's running (start the scan again); an interrupted analysis can be rerun with one click.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec bundle exec rerun --name "BOLA Detector" --no-notify --background --no-ignore-dotfiles \
+  --dir web,. --pattern '{web.rb,llm.rb,.env}' \
+  -- ruby web/web.rb

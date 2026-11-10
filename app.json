@@ -19,6 +19,7 @@
     "GOOGLE_CLIENT_SECRET": { "description": "Google OAuth web client secret", "required": false },
     "SESSION_SECRET": { "description": "Signs the sign-in cookie", "generator": "secret" },
     "ALLOWED_DOMAINS": { "description": "Only these email domains may sign in, comma-separated (empty: any Google account)", "required": false },
-    "ALLOWED_EMAILS": { "description": "Only these Google accounts may sign in, comma-separated (empty: any)", "required": false }
+    "ALLOWED_EMAILS": { "description": "Only these Google accounts may sign in, comma-separated (empty: any)", "required": false },
+    "ADMIN_EMAILS": { "description": "Accounts that see every user's scans, comma-separated", "value": "sella.rafaeli@gmail.com" }
   }
 }
