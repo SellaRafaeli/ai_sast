@@ -1,0 +1,19 @@
+{
+  "name": "route-tracer-web",
+  "description": "Web page for route_tracer.rb: paste a public repo URL, see its routes traced for BOLA / IDOR candidates.",
+  "buildpacks": [
+    { "url": "heroku/nodejs" },
+    { "url": "heroku/python" },
+    { "url": "heroku/ruby" }
+  ],
+  "formation": { "web": { "quantity": 1 } },
+  "env": {
+    "MONGODB_URI": { "description": "Mongo connection string, ideally naming a database (mongodb+srv://user:pass@host/route_tracer)", "required": true },
+    "ALLOWED_GIT_HOSTS": { "description": "Hosts users may clone from, comma-separated, or * for any", "value": "github.com,gitlab.com,bitbucket.org" },
+    "ANALYZE": { "description": "0 to skip the LLM analysis and show the trace only", "value": "1" },
+    "ANTHROPIC_API_KEY": { "description": "LLM key for the analysis (or set OPEN_AI_API_KEY instead). Without a key, scans show the trace only.", "required": false },
+    "POSTMARK_API_TOKEN": { "description": "Postmark server token for the action emails. Without it, no emails are sent.", "required": false },
+    "NOTIFY_EMAIL": { "description": "Who gets the action emails", "value": "sella.rafaeli@gmail.com" },
+    "POSTMARK_FROM": { "description": "Sender address: a confirmed sender signature or domain in Postmark (defaults to NOTIFY_EMAIL)", "required": false }
+  }
+}

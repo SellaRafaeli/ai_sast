@@ -148,6 +148,8 @@ Two scripts that find BOLA/IDOR candidates in a web app's codebase:
 
 They run as two separate commands: trace once, then analyze (or re-analyze) the saved `trace.json` as often as you like.
 
+There's also a **web page** ([`web/`](web/README.md)) where anyone can paste a public repo URL and see its routes traced, deployable to Heroku.
+
 It's a proof of concept: simple heuristics, readable logs, no attempt at completeness.
 
 ## Requirements
@@ -348,6 +350,8 @@ To add a test app: add it to `fetch.sh`, clone it, add an entry to `expected.yml
 | `test_repos/expected.yml` | Known BOLA and safe routes per test app (the ground truth) |
 | `test_repos/scoreboard.json` | Latest result per test app |
 | `test_repos/README.md` | How the tests work, and notes on each app's bugs |
+| `web/web.rb`, `web/README.md` | The web page: scan a repo from the browser, results in Mongo |
+| `Gemfile`, `Gemfile.lock`, `Procfile`, `app.json`, `requirements.txt`, `.slugignore` | Heroku setup for the web page (see [web/README.md](web/README.md)) |
 
 Not committed: the cloned apps (`test_repos/aegra-v0.9.6/`, `test_repos/node/`, `test_repos/ruby/`, `test_repos/python/`), each run's output (`test_repos/results/`) and your `.env`.
 

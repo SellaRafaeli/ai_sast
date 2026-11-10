@@ -1,0 +1,4 @@
+# Not needed for the web server: test apps and sample output.
+test_repos/
+trace.json
+trace.txt
