@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Render web/public/whitepaper.html to web/public/whitepaper.pdf with headless Chrome.
+# The page's print styles give the PDF its academic layout (A4, two columns, running header, page numbers).
+#   web/build_whitepaper_pdf
+set -euo pipefail
+cd "$(dirname "$0")/public"
+# First Chrome that actually starts (a half-updated copy can exist but be refused by macOS).
+chrome=""
+for c in "${CHROME:-}" "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+         "/Applications/Google Chrome 2.app/Contents/MacOS/Google Chrome" \
+         "$(command -v google-chrome || true)" "$(command -v chromium || true)"; do
+  if [ -n "$c" ] && [ -x "$c" ] && ( "$c" --version ) >/dev/null 2>&1; then chrome="$c"; break; fi
+done
+[ -n "$chrome" ] || { echo "No working Chrome found; set CHROME=/path/to/chrome" >&2; exit 1; }
+profile="$(mktemp -d)" # its own profile, so it runs even while your Chrome is open
+trap 'rm -rf "$profile"' EXIT
+"$chrome" --headless=new --disable-gpu --no-first-run --no-default-browser-check --user-data-dir="$profile" \
+  --no-pdf-header-footer --virtual-time-budget=15000 \
+  --print-to-pdf="$PWD/whitepaper.pdf" "file://$PWD/whitepaper.html" 2>/dev/null
+echo "wrote $PWD/whitepaper.pdf"

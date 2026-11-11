@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Route-Sliced Context: Scalable LLM Detection of Broken Object-Level Authorization · Variablee White Paper</title>
+<meta name="description" content="Variablee white paper: route-sliced context construction for LLM-based detection of BOLA / IDOR in large codebases.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Source+Code+Pro:wght@400;600&family=Inter:wght@500;600;700&display=swap">
+<style>
+  :root { --ink: #111; --muted: #555; --rule: #bbb; --accent: #6d28d9; --soft: #f4f2fa; --bg: #fff; }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--ink); background: var(--bg); font: 17px/1.55 "STIX Two Text", "Times New Roman", serif;
+         text-rendering: optimizeLegibility; font-kerning: normal; hyphens: auto; }
+  a { color: var(--accent); }
+  code, pre, .mono { font-family: "Source Code Pro", ui-monospace, Menlo, monospace; font-size: .82em; }
+
+  /* web chrome (hidden in print) */
+  .webbar { position: sticky; top: 0; z-index: 5; display: flex; justify-content: space-between; align-items: center; gap: 12px;
+            padding: 10px 16px; background: rgba(255,255,255,.94); backdrop-filter: blur(8px); border-bottom: 1px solid #e5e5e5;
+            font: 600 14px/1.2 Inter, system-ui, sans-serif; }
+  .webbar a { text-decoration: none; }
+  .webbar .pdf { padding: 8px 14px; border-radius: 8px; background: var(--accent); color: #fff; }
+  .paper { max-width: 760px; margin: 0 auto; padding: 40px 20px 80px; }
+
+  /* front matter */
+  .series { text-align: center; font: 600 11px/1.4 Inter, system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  h1.title { text-align: center; font-weight: 700; font-size: 30px; line-height: 1.2; margin: 14px 0 8px; letter-spacing: -.005em; }
+  .subtitle { text-align: center; font-style: italic; font-size: 18px; color: #333; margin: 0 0 22px; }
+  .authors { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 8px 14px; text-align: center; margin: 0 0 10px; }
+  .author .n { display: block; font-weight: 600; font-size: 15px; }
+  .author .r { display: block; font-size: 12.5px; color: var(--muted); font-style: italic; line-height: 1.3; }
+  .affil { text-align: center; font-size: 14px; color: #333; margin: 12px 0 2px; }
+  .affil small { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .abstract { margin: 26px 30px 6px; font-size: 15.5px; line-height: 1.5; }
+  .abstract h2 { text-align: center; font-size: 14px; letter-spacing: .12em; text-transform: uppercase; margin: 0 0 6px; }
+  .abstract p { margin: 0; text-align: justify; }
+  .keywords { margin: 10px 30px 0; font-size: 14px; }
+  hr.rule { border: 0; border-top: 1px solid var(--rule); margin: 22px 0; }
+
+  /* body */
+  .body h2 { font-size: 19px; margin: 30px 0 8px; font-weight: 700; break-after: avoid; }
+  .body h3 { font-size: 16.5px; margin: 20px 0 6px; font-style: italic; font-weight: 600; break-after: avoid; }
+  .body p { margin: 0 0 10px; text-align: justify; }
+  .body ul, .body ol { margin: 0 0 10px; padding-left: 22px; }
+  .body li { margin-bottom: 4px; text-align: justify; }
+  .defn { margin: 12px 0; padding: 10px 14px; border-left: 3px solid var(--accent); background: var(--soft); break-inside: avoid; }
+  .defn b.lbl { font-style: normal; }
+  .defn p:last-child { margin-bottom: 0; }
+  .eq { display: block; text-align: center; margin: 10px 0; font-style: italic; }
+  .eq .num { float: right; font-style: normal; }
+  var { font-style: italic; }
+
+  figure { margin: 18px 0; break-inside: avoid; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { font-size: 14px; line-height: 1.4; margin-top: 6px; text-align: justify; }
+  figcaption b { font-weight: 700; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14px; line-height: 1.35; margin: 4px 0; }
+  caption { caption-side: top; text-align: left; font-size: 14px; margin-bottom: 6px; }
+  th, td { padding: 4px 6px; text-align: left; vertical-align: top; }
+  thead th { border-top: 1.5px solid #111; border-bottom: 1px solid #111; font-weight: 600; }
+  tbody tr:last-child td { border-bottom: 1.5px solid #111; }
+  tr.total td { border-top: 1px solid #111; font-weight: 600; }
+  td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
+  .table-wrap { overflow-x: auto; break-inside: avoid; margin: 16px 0; }
+
+  .algo { border-top: 1.5px solid #111; border-bottom: 1.5px solid #111; margin: 16px 0; break-inside: avoid; font-size: 14px; }
+  .algo .head { border-bottom: 1px solid #111; padding: 4px 0; }
+  .algo ol { margin: 6px 0; padding-left: 30px; font-family: "STIX Two Text", serif; }
+  .algo li { margin: 1px 0; text-align: left; }
+  .algo .kw { font-weight: 700; }
+  .algo .cm { color: var(--muted); font-style: italic; float: right; padding-left: 8px; }
+  .algo .indent1 { padding-left: 18px; } .algo .indent2 { padding-left: 36px; }
+
+  pre.slice { margin: 0; padding: 10px 12px; background: #fafafa; border: 1px solid #ddd; border-radius: 3px; font-size: 11.6px;
+              line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+  pre.slice .c { color: #777; } pre.slice .hl { background: #fde8ec; } pre.slice .role { color: var(--accent); font-weight: 600; }
+
+  .refs { font-size: 14px; line-height: 1.4; }
+  .refs ol { padding-left: 26px; } .refs li { margin-bottom: 5px; text-align: left; }
+  .note { font-size: 13px; color: var(--muted); }
+
+  @media (max-width: 640px) {
+    body { font-size: 16px; } h1.title { font-size: 24px; } .abstract, .keywords { margin-left: 0; margin-right: 0; }
+    .authors { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media screen and (max-width: 640px) {
+    figure.wide { overflow-x: auto; } figure.wide svg { min-width: 620px; } figure.wide figcaption { min-width: 0; }
+  }
+
+  /* ── print: academic two-column layout ── */
+  @page { size: A4; margin: 18mm 15mm 20mm;
+          @bottom-center { content: counter(page); font: 9pt "STIX Two Text", serif; color: #444; }
+          @top-center { content: "Route-Sliced Context for BOLA Detection · Variablee White Paper"; font: italic 8pt "STIX Two Text", serif; color: #666; } }
+  @page :first { @top-center { content: none; } }
+  @media print {
+    body { font-size: 9.6pt; line-height: 1.38; }
+    .webbar { display: none; }
+    .paper { max-width: none; padding: 0; }
+    h1.title { font-size: 19pt; margin-top: 8pt; }
+    .subtitle { font-size: 11pt; margin-bottom: 12pt; }
+    .authors { grid-template-columns: repeat(6, 1fr); gap: 4pt 6pt; }
+    .author .n { font-size: 8.8pt; } .author .r { font-size: 7.6pt; }
+    .affil { font-size: 9pt; } .affil small { font-size: 8.4pt; }
+    .abstract { margin: 14pt 28pt 4pt; font-size: 9.3pt; } .abstract h2 { font-size: 8.6pt; }
+    .keywords { margin: 6pt 28pt 0; font-size: 8.8pt; }
+    hr.rule { margin: 12pt 0; }
+    .body { column-count: 2; column-gap: 7mm; column-fill: auto; }
+    .body h2 { font-size: 11pt; margin: 12pt 0 4pt; }
+    .body h3 { font-size: 10pt; margin: 8pt 0 3pt; }
+    .body p { margin-bottom: 5pt; }
+    .wide { column-span: all; }
+    .table-wrap { overflow: visible; }
+    figcaption, caption, table, .algo { font-size: 8.4pt; }
+    pre.slice { font-size: 7.1pt; line-height: 1.35; }
+    .refs { font-size: 8.2pt; }
+    a { color: inherit; text-decoration: none; }
+    .defn { background: #f5f4f9; }
+  }
+</style>
+</head>
+<body>
+<nav class="webbar">
+  <a href="/">← AI Code Vuln Detector · Variablee</a>
+  <a class="pdf" href="whitepaper.pdf" download>Download PDF</a>
+</nav>
+
+<article class="paper">
+  <div class="series">Variablee White Paper · VW-2026-01 · November 2026</div>
+  <h1 class="title">Route-Sliced Context: Scalable LLM-Based Detection of Broken Object-Level Authorization in Large Codebases</h1>
+  <p class="subtitle">How decomposing authorization review into per-route context slices makes whole-codebase BOLA / IDOR detection tractable</p>
+
+  <div class="authors">
+    <span class="author"><span class="n">Sella Rafaeli</span><span class="r">Founder, Security Research Lead</span></span>
+    <span class="author"><span class="n">Ariel Dotan</span><span class="r">CEO</span></span>
+    <span class="author"><span class="n">Avi Greenwald</span><span class="r">Software Engineer, Founder</span></span>
+    <span class="author"><span class="n">Aviv Kerbel</span><span class="r">Chief Business Officer</span></span>
+    <span class="author"><span class="n">Bar Haleva</span><span class="r">Founder</span></span>
+    <span class="author"><span class="n">Gal Yossipov</span><span class="r">Software Engineer</span></span>
+    <span class="author"><span class="n">Omri Ganor</span><span class="r">Founder</span></span>
+    <span class="author"><span class="n">Itay Shaviv</span><span class="r">Founder</span></span>
+    <span class="author"><span class="n">Nir Peisakhov</span><span class="r">Engineering &amp; Product</span></span>
+    <span class="author"><span class="n">Omri Talmon</span><span class="r">Counsel</span></span>
+    <span class="author"><span class="n">Oren Haliva</span><span class="r">Founder</span></span>    
+    <span class="author"><span class="n">Shahaf Cohen</span><span class="r">Full Stack Developer</span></span>
+    <span class="author"><span class="n">Shiran Aizik</span><span class="r">Founder</span></span>
+    <span class="author"><span class="n">Amos Stern</span><span class="r">Data Science</span></span>
+    <span class="author"><span class="n">Yohai Nossan</span><span class="r">Software Engineer</span></span>
+    <span class="author"><span class="n">Zohar Buchris</span><span class="r">Founder</span></span>
+    <span class="author"><span class="n">Zohar Eshed</span><span class="r">Founder</span></span>
+  </div>
+  <p class="affil">Variablee · Frontier AI Security Lab
+    <small>Correspondence: Sella Rafaeli, Security Research Lead · Code and benchmark: github.com/sellarafaeli/ai_sast</small></p>
+
+  <section class="abstract">
+    <h2>Abstract</h2>
+    <p>Broken Object-Level Authorization (BOLA, also called IDOR) is the top risk in the OWASP API Security Top&nbsp;10, yet it
+      remains one of the hardest bug classes for static analysis: the defect is the <em>absence</em> of a check, and whether a check
+      is needed depends on application semantics that pattern-based tools cannot see. Large language models can reason about those
+      semantics, but whole-codebase review overruns their context windows and degrades their attention. We observe that BOLA is a
+      <em>route-local</em> property: whether a request handler leaks another principal's object is decided entirely by the code that
+      executes for that route. We exploit this with <b>route-sliced context</b>: a deterministic, polyglot static pipeline that
+      enumerates every HTTP route, reconstructs its filter and middleware chain, traces its bounded call graph down to data access,
+      and serializes the result into a small, self-contained slice that a language model judges in isolation. Slice size is bounded by
+      local program structure rather than codebase size; across four benchmark applications the median slice is 2.5–3.6% of the
+      indexed code, a 28–40&times; reduction. On applications with 25 independently documented BOLAs (one CVE-tracked production
+      project and three OWASP-style targets in Python, JavaScript and Ruby) the system detects 24 (96% recall) while flagging 1 of 28
+      routes known to be safe. We describe the algorithm, its bounds, an empirical evaluation, and its limitations.</p>
+  </section>
+  <p class="keywords"><b>Keywords:</b> broken object-level authorization, IDOR, static analysis, program slicing, large language models, API security, SAST</p>
+  <hr class="rule">
+
+  <div class="body">
+    <h2>1&nbsp;&nbsp;Introduction</h2>
+    <p>An object-level authorization bug is easy to describe and hard to find. A signed-in user requests
+      <code>GET /invoices/1042</code>, the server loads invoice 1042 by its identifier and returns it, and nothing verifies that the
+      invoice belongs to the caller. By changing a single number, any user can read, modify or delete another user's data. OWASP ranks
+      this class, Broken Object-Level Authorization (BOLA), first among API security risks [1].</p>
+    <p>Classical static analysis is poorly matched to BOLA. Taint analysis [10] asks whether attacker-controlled data reaches a
+      dangerous sink; but in a BOLA the sink (a database lookup by identifier) is perfectly ordinary, and the vulnerability is a
+      <em>missing</em> predicate relating the loaded object to the principal. Whether such a predicate is required is a question of
+      intent: a public profile and a private invoice are fetched by identical code. Prior work on access-control bugs therefore relied
+      on inferring the intended policy from the application itself [3, 4].</p>
+    <p>Large language models (LLMs) are well suited to exactly this kind of semantic judgment: they can read a handler, recognize
+      <code>current_user.invoices.find(id)</code> as a scoped lookup and <code>Invoice.find(id)</code> as an unscoped one, and
+      distinguish authentication from authorization. The obstacle is scale. A production codebase does not fit in a context window,
+      and even where it fits, model accuracy degrades when the relevant evidence is buried in long inputs [5]. Asking a model to
+      "find the BOLAs in this repository" conflates two problems: <em>locating</em> the code that matters for each endpoint, and
+      <em>judging</em> it.</p>
+    <p>This paper separates the two. Our central observation is that BOLA is <b>route-local</b>: every BOLA lives on a specific
+      route, and whether that route is vulnerable is decided by the code that runs when it is invoked, namely its filters, middleware,
+      guards, handler and the procedures they call. We therefore let deterministic static analysis do the locating, building one
+      compact <em>context slice</em> per route, and let the model do only the judging, one slice at a time. The decomposition turns
+      one intractable whole-program question into many small, independent, bounded ones.</p>
+    <p>Our contributions are:</p>
+    <ol>
+      <li>A formalization of BOLA as a route-local predicate and the resulting <b>route decomposition</b> of whole-codebase detection (§3).</li>
+      <li>A <b>route-sliced context construction</b> algorithm: polyglot symbol indexing, route discovery across nine frameworks,
+        framework-aware filter-chain reconstruction, and bounded call-graph tracing with explicit data-access leaves (§4).</li>
+      <li>A size bound showing slice size depends on local program structure, not on codebase size, and measurements on real
+        applications showing a 28–40&times; median reduction in context (§4.5, §5.4).</li>
+      <li>A definition-grounded <b>LLM judge</b> protocol that produces calibrated, evidence-carrying verdicts (§4.7).</li>
+      <li>An evaluation on 25 documented BOLAs across four applications and three languages: 96% recall with one false positive on
+        28 known-safe routes (§5).</li>
+    </ol>
+
+    <h2>2&nbsp;&nbsp;Background and Related Work</h2>
+    <p><b>Object-level authorization.</b> We follow OWASP's definition [1]: an API endpoint that receives an object identifier and
+      performs an action on the object without verifying that the caller may access it. Authentication, establishing <em>who</em>
+      is calling, is necessary but not sufficient; authorization must relate the specific object to the specific principal.</p>
+    <p><b>Static detection of access-control bugs.</b> Sun, Xu and Su detect access-control vulnerabilities in web applications by
+      inferring per-role sitemaps and finding pages reachable outside them [3]. MACE identifies privilege-escalation bugs by checking
+      the consistency of authorization context across code paths that access the same resources [4]. Both derive the intended policy
+      from the application itself, as we do implicitly through the model, but rely on hand-built analyses per language and framework.
+      Livshits and Lam's taint-based analysis [10] illustrates why sink-oriented tools struggle: BOLA has no distinguished sink.</p>
+    <p><b>Program slicing.</b> Weiser defined a program slice as the subset of a program that can affect a value at a point of
+      interest [2]. Our route slices are a coarse, procedure-level analogue: the subset of the program that can execute for a given
+      entry point, chosen so that a reader (here, a model) can decide a property from the slice alone.</p>
+    <p><b>LLMs and long context.</b> Liu et al. show that models use information at the start and end of long inputs far better than
+      information in the middle [5]. For vulnerability review, where the decisive line may be anywhere, this argues for short, focused
+      inputs over whole-repository prompts.</p>
+
+    <h2>3&nbsp;&nbsp;Problem Formulation</h2>
+    <p>Let <var>P</var> be a program with a set of HTTP routes <var>R</var>. Each route <var>r</var> &isin; <var>R</var> has a handler
+      <var>h<sub>r</sub></var> and an ordered chain of filters, middleware and guards <var>F<sub>r</sub></var> that run before it.
+      Let <var>G</var> be the call graph of <var>P</var>, and define the <b>execution closure</b> of <var>r</var> as the set of
+      procedures reachable from its entry points:</p>
+    <span class="eq">E(r) = Reach<sub>G</sub>(F<sub>r</sub> &cup; {h<sub>r</sub>})<span class="num">(1)</span></span>
+    <div class="defn">
+      <p><b class="lbl">Definition 1 (BOLA).</b> Route <var>r</var> has a BOLA if (i) a request to <var>r</var> carries an identifier
+        <var>x</var> chosen by the caller; (ii) some procedure in <var>E(r)</var> reads, changes or deletes an object <var>o</var>
+        selected by <var>x</var>; and (iii) no predicate evaluated in <var>E(r)</var> before that access relates <var>o</var> to the
+        calling principal, whether by an ownership check, a policy check, or a lookup scoped through the principal.</p>
+    </div>
+    <div class="defn">
+      <p><b class="lbl">Observation 1 (Route locality).</b> Conditions (i)–(iii) refer only to the request to <var>r</var> and to code
+        in <var>E(r)</var>. Hence the BOLA predicate of a route is a function of its closure alone, and detection over the whole program
+        decomposes as</p>
+      <span class="eq">BOLA(P) = &#8899;<sub>r &isin; R</sub> BOLA(r, E(r))<span class="num">(2)</span></span>
+    </div>
+    <p>Equation (2) is the foundation of the method. It says that an exhaustive search for BOLAs need never consider the program as a
+      whole: it suffices to enumerate routes and examine each closure independently. Each sub-problem is small, the sub-problems are
+      independent (and so trivially parallel), and coverage is exhaustive by construction over the enumerated routes. Two practical
+      gaps separate the ideal from the implementation: <var>E(r)</var> must be computed statically, and so is approximated (§4.4,
+      §7); and not every entry point is an HTTP route (§7).</p>
+
+    <h2>4&nbsp;&nbsp;Method</h2>
+    <p>The system has a deterministic <em>static phase</em>, which makes no model calls, followed by a <em>semantic phase</em> in which
+      a model judges slices (Figure&nbsp;1).</p>
+
+    <figure class="wide">
+      <svg viewBox="0 0 760 214" xmlns="http://www.w3.org/2000/svg" font-family="STIX Two Text, Times New Roman, serif" role="img"
+           aria-label="Pipeline: repository, polyglot index, route discovery, filter chains, bounded tracing, input pruning, slice serialization; then batching, LLM judge, ranked findings">
+        <defs><marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#333"/></marker></defs>
+        <text x="8" y="16" font-size="11" font-weight="700" letter-spacing="1.2" fill="#333">STATIC PHASE · DETERMINISTIC · NO MODEL CALLS</text>
+        <g font-size="12" fill="#111">
+          <rect x="6" y="28" width="92" height="64" rx="4" fill="#fff" stroke="#333"/>
+          <text x="52" y="54" text-anchor="middle" font-weight="700">Repository</text><text x="52" y="72" text-anchor="middle" font-size="10.5" fill="#555">Ruby, Python,</text><text x="52" y="85" text-anchor="middle" font-size="10.5" fill="#555">JS / TS</text>
+          <rect x="116" y="28" width="98" height="64" rx="4" fill="#fff" stroke="#333"/>
+          <text x="165" y="50" text-anchor="middle" font-weight="700">1 Index</text><text x="165" y="66" text-anchor="middle" font-size="10.5" fill="#555">defs, classes,</text><text x="165" y="80" text-anchor="middle" font-size="10.5" fill="#555">call sites</text>
+          <rect x="232" y="28" width="98" height="64" rx="4" fill="#fff" stroke="#333"/>
+          <text x="281" y="50" text-anchor="middle" font-weight="700">2 Routes</text><text x="281" y="66" text-anchor="middle" font-size="10.5" fill="#555">9 frameworks,</text><text x="281" y="80" text-anchor="middle" font-size="10.5" fill="#555">mount prefixes</text>
+          <rect x="348" y="28" width="98" height="64" rx="4" fill="#fff" stroke="#333"/>
+          <text x="397" y="50" text-anchor="middle" font-weight="700">3 Filters</text><text x="397" y="66" text-anchor="middle" font-size="10.5" fill="#555">before-chains,</text><text x="397" y="80" text-anchor="middle" font-size="10.5" fill="#555">guards, deps</text>
+          <rect x="464" y="28" width="98" height="64" rx="4" fill="#fff" stroke="#333"/>
+          <text x="513" y="50" text-anchor="middle" font-weight="700">4 Trace</text><text x="513" y="66" text-anchor="middle" font-size="10.5" fill="#555">bounded call graph</text><text x="513" y="80" text-anchor="middle" font-size="10.5" fill="#555">to data access</text>
+          <rect x="580" y="28" width="80" height="64" rx="4" fill="#fff" stroke="#333"/>
+          <text x="620" y="50" text-anchor="middle" font-weight="700">5 Prune</text><text x="620" y="66" text-anchor="middle" font-size="10.5" fill="#555">routes with</text><text x="620" y="80" text-anchor="middle" font-size="10.5" fill="#555">no input</text>
+          <rect x="678" y="28" width="76" height="64" rx="4" fill="#f1ecfb" stroke="#6d28d9" stroke-width="1.6"/>
+          <text x="716" y="56" text-anchor="middle" font-weight="700" fill="#4c1d95">6 Slices</text><text x="716" y="74" text-anchor="middle" font-size="10.5" fill="#4c1d95">one per route</text>
+        </g>
+        <g stroke="#333" stroke-width="1.3" marker-end="url(#ah)">
+          <line x1="98" y1="60" x2="114" y2="60"/><line x1="214" y1="60" x2="230" y2="60"/><line x1="330" y1="60" x2="346" y2="60"/>
+          <line x1="446" y1="60" x2="462" y2="60"/><line x1="562" y1="60" x2="578" y2="60"/><line x1="660" y1="60" x2="676" y2="60"/>
+          <path d="M716,92 L716,112 L190,112 L190,132" fill="none"/>
+        </g>
+        <text x="8" y="128" font-size="11" font-weight="700" letter-spacing="1.2" fill="#333">SEMANTIC PHASE</text>
+        <g font-size="12" fill="#111">
+          <rect x="116" y="138" width="148" height="64" rx="4" fill="#fff" stroke="#333"/>
+          <text x="190" y="160" text-anchor="middle" font-weight="700">7 Batch</text><text x="190" y="176" text-anchor="middle" font-size="10.5" fill="#555">≤ 10 slices, ≤ 150k chars;</text><text x="190" y="190" text-anchor="middle" font-size="10.5" fill="#555">parallel workers</text>
+          <rect x="300" y="138" width="190" height="64" rx="4" fill="#f1ecfb" stroke="#6d28d9" stroke-width="1.6"/>
+          <text x="395" y="160" text-anchor="middle" font-weight="700" fill="#4c1d95">8 LLM judge</text><text x="395" y="176" text-anchor="middle" font-size="10.5" fill="#4c1d95">definition-grounded rubric;</text><text x="395" y="190" text-anchor="middle" font-size="10.5" fill="#4c1d95">verdict, score, evidence, fix</text>
+          <rect x="526" y="138" width="148" height="64" rx="4" fill="#fff" stroke="#333"/>
+          <text x="600" y="160" text-anchor="middle" font-weight="700">9 Rank</text><text x="600" y="176" text-anchor="middle" font-size="10.5" fill="#555">by score; triage</text><text x="600" y="190" text-anchor="middle" font-size="10.5" fill="#555">queue for review</text>
+        </g>
+        <g stroke="#333" stroke-width="1.3" marker-end="url(#ah)"><line x1="264" y1="170" x2="298" y2="170"/><line x1="490" y1="170" x2="524" y2="170"/></g>
+      </svg>
+      <figcaption><b>Figure 1.</b> System overview. Steps 1–6 are deterministic static analysis and emit one context slice per
+        route that takes attacker-controlled input. Steps 7–9 ask a model to judge each slice independently and rank the results.</figcaption>
+    </figure>
+
+    <h3>4.1&nbsp;&nbsp;Polyglot symbol index</h3>
+    <p>Every source file is parsed with a production parser for its language: Prism for Ruby, the standard <code>ast</code> module for
+      Python, and the TypeScript compiler API for JavaScript and TypeScript. Each procedure becomes an index record
+      <var>d</var> = &lang;name, owner, file, lines, calls&rang;, where <var>owner</var> is the enclosing class or module and
+      <var>calls</var> lists the call sites in its body as (receiver, name) pairs. Class records keep superclasses and included modules
+      so that inheritance can be followed later. Dependency, build, test and front-end directories are excluded, since browser code
+      does not serve routes. The index is built once per repository and queried by name.</p>
+
+    <h3>4.2&nbsp;&nbsp;Route discovery</h3>
+    <p>Routes are discovered per framework from the constructs that declare them (Table&nbsp;1). Where routers are mounted under
+      prefixes, the prefixes are composed: Django <code>include()</code> chains, Express <code>app.use('/api', router)</code> including
+      routers assembled across files, and Rails <code>namespace</code>/<code>scope</code> nesting. Rails <code>resources</code>
+      declarations expand to their REST actions, and actions with neither a controller method nor a view template are discarded, as
+      the framework would answer them with 404.</p>
+    <div class="table-wrap wide">
+      <table>
+        <caption><b>Table 1.</b> Route sources and pre-handler code reconstructed per framework.</caption>
+        <thead><tr><th>Framework</th><th>Routes from</th><th>Code that runs before the handler</th></tr></thead>
+        <tbody>
+          <tr><td>Rails</td><td><code>config/routes.rb</code>: resources, nesting, member/collection, namespace, scope</td><td><code>before_action</code> / <code>skip_before_action</code> with <code>only</code>/<code>except</code>, through superclasses and concerns</td></tr>
+          <tr><td>Sinatra</td><td><code>get '/x' do … end</code></td><td><code>before</code> blocks in the same file</td></tr>
+          <tr><td>Flask, FastAPI</td><td>route decorators</td><td><code>before_request</code>, decorators, <code>Depends(…)</code></td></tr>
+          <tr><td>Django</td><td><code>path</code>/<code>re_path</code> in <code>urls.py</code>, class-based views</td><td>view decorators</td></tr>
+          <tr><td>Express, Koa, Fastify</td><td><code>app.get(…)</code>, <code>router.route(…)</code>, mounted routers</td><td>per-route middleware, <code>app.use(mw)</code></td></tr>
+          <tr><td>NestJS</td><td><code>@Controller</code> + <code>@Get</code>/<code>@Post</code>/…</td><td><code>@UseGuards</code>, traced into <code>canActivate</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>4.3&nbsp;&nbsp;Filter-chain reconstruction</h3>
+    <p>Authorization logic frequently lives outside the handler, and a slice that omits it would make every route look vulnerable.
+      For each route we reconstruct the ordered chain <var>F<sub>r</sub></var>. In Rails this means walking the controller's ancestor
+      chain from the base class down, applying each <code>before_action</code> and <code>skip_before_action</code> subject to its
+      <code>only</code>/<code>except</code> lists, so that a filter declared in <code>ApplicationController</code> and skipped in one
+      action is correctly absent from that action's slice. Middleware and guards from third-party libraries have no source in the
+      repository; they are kept as named <em>external</em> nodes so the judge can see that, for example, a <code>passport</code>
+      authentication guard ran, without assuming what it checks.</p>
+
+    <h3>4.4&nbsp;&nbsp;Bounded call tracing</h3>
+    <p>Starting from <var>F<sub>r</sub></var> and <var>h<sub>r</sub></var>, the tracer expands call sites into callee definitions
+      (Algorithm&nbsp;1). Resolution is name-based and ordered from most to least certain:</p>
+    <ol>
+      <li>Calls resolve only within the caller's language.</li>
+      <li>A call on a constant receiver (<code>Invoice.find</code>, <code>User.objects.get</code>) resolves to that class and its
+        ancestors. If the method is not defined in the application, as with ORM finders, it becomes a <b>data-access leaf</b> pointing
+        at the model's file. These leaves are the central IDOR signal: they mark exactly where an identifier selects an object.</li>
+      <li>An implicit-self call resolves to the caller's class, then its ancestors and included modules, then the same file.</li>
+      <li>A call on another object resolves by name to definitions outside the caller's own class. One candidate is followed; two or
+        three are all followed (over-approximating the closure rather than guessing); more are recorded as unresolved. An optional
+        mode lets a model choose among two or three candidates from the caller's code.</li>
+    </ol>
+    <p>Calls with very common names on unknown receivers (<code>each</code>, <code>map</code>, <code>to_json</code>) are not
+      followed, and standard-library classes are not treated as models. Each procedure is expanded at most once per route, cycles
+      are cut, and depth is bounded by <var>d</var><sub>max</sub> (6 by default).</p>
+
+    <div class="algo">
+      <div class="head"><b>Algorithm 1</b>&nbsp; RouteSlice(<var>r</var>, <var>I</var>, <var>d</var><sub>max</sub>): build the context slice of route <var>r</var> from index <var>I</var></div>
+      <ol>
+        <li><span class="cm">§4.3</span>(<var>h</var>, <var>F</var>) &larr; Entry(<var>r</var>)</li>
+        <li><span class="cm">visited set, ordered slice</span><var>V</var> &larr; &empty;; &nbsp;<var>S</var> &larr; &lang;&rang;</li>
+        <li><span class="kw">for each</span> <var>f</var> &isin; <var>F</var> <span class="kw">do</span> Visit(<var>f</var>, <i>filter</i>, 1, &empty;)</li>
+        <li>Visit(<var>h</var>, <i>handler</i>, 1, &empty;)</li>
+        <li><span class="cm">pruned (§4.6)</span><span class="kw">if</span> Inputs(<var>r</var>, <var>V</var>) = &empty; <span class="kw">then return</span> &perp;</li>
+        <li><span class="kw">return</span> Serialize(<var>r</var>, <var>S</var>)</li>
+        <li><span class="kw">procedure</span> Visit(<var>m</var>, <var>role</var>, <var>k</var>, <var>path</var>)</li>
+        <li class="indent1"><span class="kw">if</span> <var>m</var> is external <span class="kw">or</span> a data leaf <span class="kw">then</span> record <var>m</var>; <span class="kw">return</span></li>
+        <li class="indent1"><span class="cm">cycle or seen</span><span class="kw">if</span> <var>m</var> &isin; <var>path</var> <span class="kw">or</span> <var>m</var> &isin; <var>V</var> <span class="kw">then return</span></li>
+        <li class="indent1"><var>V</var> &larr; <var>V</var> &cup; {<var>m</var>}; &nbsp;<var>S</var> &larr; <var>S</var> &middot; &lang;<var>role</var>, source(<var>m</var>)&rang;</li>
+        <li class="indent1"><span class="kw">if</span> <var>k</var> &ge; <var>d</var><sub>max</sub> <span class="kw">then return</span></li>
+        <li class="indent1"><span class="kw">for each</span> call site <var>c</var> &isin; calls(<var>m</var>) <span class="kw">do</span></li>
+        <li class="indent2"><span class="cm">|T| &le; B</span><var>T</var> &larr; Resolve(<var>c</var>, <var>m</var>, <var>I</var>)</li>
+        <li class="indent2"><span class="kw">for each</span> <var>t</var> &isin; <var>T</var> <span class="kw">do</span> Visit(<var>t</var>, kind(<var>c</var>), <var>k</var>+1, <var>path</var> &cup; {<var>m</var>})</li>
+      </ol>
+    </div>
+
+    <h3>4.5&nbsp;&nbsp;A size bound independent of the codebase</h3>
+    <p>Let <var>c</var> be the maximum number of call sites in a procedure, <var>B</var> = 3 the maximum fan-out per call site, and
+      <var>L</var> = 300 the per-procedure line cap. Because Algorithm&nbsp;1 expands each entry point to depth at most
+      <var>d</var><sub>max</sub>,</p>
+    <span class="eq">|V(r)| &le; (|F<sub>r</sub>| + 1) &middot; &Sigma;<sub>k=0</sub><sup>d<sub>max</sub>&minus;1</sup> (cB)<sup>k</sup>,
+      &nbsp;&nbsp;&nbsp; |S(r)| &le; L &middot; |V(r)|<span class="num">(3)</span></span>
+    <p>Neither bound mentions the size of <var>P</var>. The bound is loose, since real handlers are shallow and most call sites resolve
+      to one target or to a data-access leaf, but its form is what matters: a slice grows with the <em>local</em> complexity of a route,
+      not with the number of other routes, modules or services in the repository. As a codebase grows, the context needed per route
+      stays roughly constant while the whole-repository context grows without limit, so the advantage of slicing grows with scale.
+      Section&nbsp;5.4 measures the slices in practice.</p>
+
+    <figure class="wide">
+      <pre class="slice"><span class="role">Route:</span> GET /api/v1/mobile/:id  (rails)   <span class="role">Handler:</span> Api::V1::MobileController#show   <span class="role">Input:</span> path, request_read
+<span class="c">Data-access calls: User.find_by, Analytics.create, ActionMailer::Base.default_url_options</span>
+
+<span class="role">[filter]</span>  ApplicationController#has_info           application_controller.rb:40-52
+  <span class="role">[call]</span>  ApplicationController#current_user     application_controller.rb:18-23  <span class="c">→ User.find_by</span>
+<span class="role">[filter]</span>  ApplicationController#create_analytic    application_controller.rb:54-56  <span class="c">→ Analytics.create</span>
+<span class="role">[filter]</span>  ApplicationController#mailer_options     application_controller.rb:13-16
+<span class="role">[filter]</span>  Api::V1::MobileController#mobile_request?  api/v1/mobile_controller.rb:26-32
+<span class="role">[handler]</span> Api::V1::MobileController#show           api/v1/mobile_controller.rb:8-13
+    def show
+      if params[:class]
+        model = params[:class].classify.constantize
+        <span class="hl">respond_with model.find(params[:id]).to_json</span>
+      end
+    end
+
+<span class="role">Verdict:</span> likely · score 100 · auth checks: none
+<span class="role">Object:</span>  params[:id], selecting a record of the class named by params[:class]
+<span class="c">Reason (model output): "The handler constantizes a user-supplied class and finds a record by a
+user-supplied id without any ownership or authorization checks, enabling access to arbitrary records."</span></pre>
+      <figcaption><b>Figure 2.</b> A real slice and verdict from the RailsGoat benchmark (abridged: filter bodies omitted). Four filters run before the handler,
+        three of them inherited from <code>ApplicationController</code>; none relates the record to the caller. The slice is 2.1&nbsp;KB, against 71&nbsp;KB of indexed
+        application code, and contains everything needed to reach the verdict.</figcaption>
+    </figure>
+
+    <h3>4.6&nbsp;&nbsp;Input-based pruning</h3>
+    <p>By Definition&nbsp;1(i), a route that carries no caller-chosen identifier cannot have a BOLA. A route is kept if it has path
+      parameters, accepts a body (POST, PUT, PATCH), takes handler arguments outside the path (query parameters in Flask and FastAPI),
+      or reaches any code that reads request parameters. Routes with none of these are dropped before the semantic phase.</p>
+
+    <h3>4.7&nbsp;&nbsp;Slice serialization and the LLM judge</h3>
+    <p>Each slice is serialized as a header (route, handler, input kinds, external middleware, data-access calls) followed by the
+      source of every reached procedure in visit order, each labeled with its role (<i>filter</i>, <i>handler</i>, <i>call</i>) and
+      its <code>file:lines</code> span (Figure&nbsp;2). Because filters are visited first, the serialized order mirrors execution
+      order: the model reads authorization code before the handler it protects.</p>
+    <p>The judge receives Definition&nbsp;1 almost verbatim, together with rules distilled from how BOLAs are missed or over-reported
+      in practice: authentication is not authorization; a library guard whose code is absent counts as authorization only if its name
+      says so (<code>OwnerGuard</code>, <code>authorize_resource</code>); creating an object can be a BOLA if it attaches to someone
+      else's parent object by identifier; and because the trace is partial, confidence must drop when the decisive code is not shown.
+      It returns, per route, a verdict (<i>likely</i>, <i>possible</i>, <i>unlikely</i>), a 0–100 score on a banded rubric, the
+      identifier and object, the data-access call, the checks it saw, <code>file:line</code> evidence, a reason and a fix. Slices are
+      grouped into batches of at most ten routes and 150,000 characters and judged by parallel workers, on the order of one model call
+      per ten routes. Every claim in a verdict can be checked against the slice it came from.</p>
+
+
+    <h2>5&nbsp;&nbsp;Evaluation</h2>
+    <h3>5.1&nbsp;&nbsp;Benchmark</h3>
+    <p>We evaluate on four applications, each pinned to a fixed version so that results are reproducible, chosen to span three
+      languages and four frameworks (Table&nbsp;2). Ground truth combines public disclosures and challenge documentation with code
+      review. For each application we label routes with a known BOLA (<i>vulnerable</i>) and routes verified to check ownership
+      (<i>safe</i>). One application, aegra, is a real-world open-source project whose BOLAs were publicly disclosed (CVE-2026-44504)
+      and later fixed; the others are deliberately vulnerable applications widely used to train practitioners and test tools.</p>
+    <div class="table-wrap">
+      <table>
+        <caption><b>Table 2.</b> Benchmark applications and sources of ground truth.</caption>
+        <thead><tr><th>Application</th><th>Stack</th><th>Ground truth</th><th class="r">Vuln.</th><th class="r">Safe</th></tr></thead>
+        <tbody>
+          <tr><td>aegra v0.9.6 [9]</td><td>Python / FastAPI</td><td>CVE-2026-44504 (real project)</td><td class="r">3</td><td class="r">12</td></tr>
+          <tr><td>dvws-node [8]</td><td>Node.js / Express</td><td>CHALLENGES.md #15, #19, #33, #39, #53</td><td class="r">7</td><td class="r">0</td></tr>
+          <tr><td>OWASP RailsGoat [6]</td><td>Ruby / Rails</td><td>IDOR specification and code review</td><td class="r">8</td><td class="r">9</td></tr>
+          <tr><td>OWASP crAPI v1.1.6, workshop [7]</td><td>Python / Django</td><td>Challenge #2 and code review</td><td class="r">7</td><td class="r">7</td></tr>
+          <tr class="total"><td>Total</td><td></td><td></td><td class="r">25</td><td class="r">28</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>5.2&nbsp;&nbsp;Metrics and setup</h3>
+    <p>A known BOLA counts as <em>detected</em> if its route receives a <i>likely</i> or <i>possible</i> verdict. <em>Recall</em> is
+      the fraction of known BOLAs detected; <em>false positives</em> are safe-labeled routes so flagged. Flags on routes absent from the
+      labels are reported separately as <em>unlabeled flags</em>: they are candidate findings or false positives that require manual
+      review, and we do not count them either way. The static phase ran with default settings (<var>d</var><sub>max</sub> = 6,
+      <var>B</var> = 3, no model-assisted resolution); the judge was OpenAI GPT-5. Each application was run once (9–10 November 2026).</p>
+
+    <h3>5.3&nbsp;&nbsp;Detection results</h3>
+    <div class="table-wrap">
+      <table>
+        <caption><b>Table 3.</b> Detection results. Routes: routes that take input and were judged.</caption>
+        <thead><tr><th>Application</th><th class="r">Routes</th><th class="r">Detected</th><th class="r">Recall</th><th class="r">False pos.</th><th class="r">Unlabeled flags</th></tr></thead>
+        <tbody>
+          <tr><td>aegra v0.9.6</td><td class="r">44</td><td class="r">3 / 3</td><td class="r">100%</td><td class="r">0 / 12</td><td class="r">4</td></tr>
+          <tr><td>dvws-node</td><td class="r">57</td><td class="r">6 / 7</td><td class="r">86%</td><td class="r">0 / 0</td><td class="r">8</td></tr>
+          <tr><td>RailsGoat</td><td class="r">42</td><td class="r">8 / 8</td><td class="r">100%</td><td class="r">1 / 9</td><td class="r">2</td></tr>
+          <tr><td>crAPI workshop</td><td class="r">25</td><td class="r">7 / 7</td><td class="r">100%</td><td class="r">0 / 7</td><td class="r">3</td></tr>
+          <tr class="total"><td>Total</td><td class="r">168</td><td class="r">24 / 25</td><td class="r">96%</td><td class="r">1 / 28</td><td class="r">17</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The system detected 24 of 25 known BOLAs, and every detected BOLA received a <i>likely</i> verdict with score 90–100 except one
+      (crAPI <code>POST …/service_request/&lt;id&gt;/comment</code>, <i>possible</i>, 45). The single miss, dvws-node
+      <code>POST /graphql</code>, is a structural gap rather than a judgment error: the vulnerable code lives in GraphQL resolvers
+      mounted through Apollo middleware, which the route tracer does not yet follow, so the slice contained only a rate limiter and the
+      model correctly found nothing in it. The single false positive, RailsGoat <code>GET /api/v1/users/:id</code>, was scored
+      <i>possible</i> 35, in the band reserved for weak or ambiguous checks.</p>
+    <p>Unlabeled flags proved valuable. On RailsGoat the system flagged <code>POST /password_resets</code> (<i>likely</i>, 95): the
+      handler deserializes a client-supplied user object and saves it, allowing a password change for an arbitrary account. This
+      appears to be a genuine vulnerability not listed in the application's own documentation of intended flaws.</p>
+
+    <h3>5.4&nbsp;&nbsp;Context reduction</h3>
+    <p>Table&nbsp;4 compares each application's indexed source (the code a whole-repository approach would have to consider) with the
+      slices actually sent to the judge. Across all four applications the median slice is 2.5–3.6% of the codebase, a 28–40&times;
+      reduction, and even the largest slice is about 14% of it. The median slice spans 2–18 procedures in 4–11 files.</p>
+    <div class="table-wrap">
+      <table>
+        <caption><b>Table 4.</b> Indexed codebase versus per-route slice size, in KB of source (a slice includes its header).</caption>
+        <thead><tr><th>App</th><th class="r">Files</th><th class="r">Lines</th><th class="r">Code&shy;base</th><th class="r">Median slice</th><th class="r">P90</th><th class="r">Max</th><th class="r">Ratio</th></tr></thead>
+        <tbody>
+          <tr><td>aegra</td><td class="r">128</td><td class="r">16,300</td><td class="r">582</td><td class="r">18.8</td><td class="r">52.6</td><td class="r">82.5</td><td class="r">31&times;</td></tr>
+          <tr><td>dvws-node</td><td class="r">43</td><td class="r">3,852</td><td class="r">137</td><td class="r">4.9</td><td class="r">7.4</td><td class="r">19.4</td><td class="r">28&times;</td></tr>
+          <tr><td>RailsGoat</td><td class="r">86</td><td class="r">2,509</td><td class="r">71</td><td class="r">2.1</td><td class="r">3.3</td><td class="r">4.8</td><td class="r">34&times;</td></tr>
+          <tr><td>crAPI workshop</td><td class="r">51</td><td class="r">4,810</td><td class="r">165</td><td class="r">4.2</td><td class="r">5.8</td><td class="r">6.9</td><td class="r">40&times;</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <figure>
+      <svg viewBox="0 0 560 262" xmlns="http://www.w3.org/2000/svg" font-family="STIX Two Text, Times New Roman, serif" role="img"
+           aria-label="Log-scale bars comparing each application's codebase size with its median, 90th percentile and maximum slice size">
+        <g font-size="11" fill="#444">
+          <line x1="110" y1="16" x2="110" y2="226" stroke="#ddd"/><line x1="250" y1="16" x2="250" y2="226" stroke="#ddd"/>
+          <line x1="390" y1="16" x2="390" y2="226" stroke="#ddd"/><line x1="530" y1="16" x2="530" y2="226" stroke="#ddd"/>
+          <text x="110" y="242" text-anchor="middle">1 KB</text><text x="250" y="242" text-anchor="middle">10 KB</text>
+          <text x="390" y="242" text-anchor="middle">100 KB</text><text x="530" y="242" text-anchor="middle">1 MB</text>
+          <text x="320" y="258" text-anchor="middle" font-style="italic">size of source given to the reviewer (log scale)</text>
+        </g>
+        <g font-size="12.5" fill="#111">
+          <text x="102" y="38" text-anchor="end" font-weight="600">aegra</text>
+          <rect x="110" y="24" width="387" height="12" fill="#c9c9c9"/>
+          <rect x="110" y="40" width="178" height="12" fill="#6d28d9"/>
+          <line x1="351" y1="40" x2="351" y2="52" stroke="#6d28d9" stroke-width="2"/><line x1="378" y1="38" x2="378" y2="54" stroke="#6d28d9" stroke-width="1.2" stroke-dasharray="2,1.5"/>
+          <text x="503" y="34" font-size="11" fill="#444">31&times;</text>
+
+          <text x="102" y="90" text-anchor="end" font-weight="600">dvws-node</text>
+          <rect x="110" y="76" width="299" height="12" fill="#c9c9c9"/>
+          <rect x="110" y="92" width="97" height="12" fill="#6d28d9"/>
+          <line x1="232" y1="92" x2="232" y2="104" stroke="#6d28d9" stroke-width="2"/><line x1="290" y1="90" x2="290" y2="106" stroke="#6d28d9" stroke-width="1.2" stroke-dasharray="2,1.5"/>
+          <text x="415" y="86" font-size="11" fill="#444">28&times;</text>
+
+          <text x="102" y="142" text-anchor="end" font-weight="600">RailsGoat</text>
+          <rect x="110" y="128" width="259" height="12" fill="#c9c9c9"/>
+          <rect x="110" y="144" width="45" height="12" fill="#6d28d9"/>
+          <line x1="183" y1="144" x2="183" y2="156" stroke="#6d28d9" stroke-width="2"/><line x1="205" y1="142" x2="205" y2="158" stroke="#6d28d9" stroke-width="1.2" stroke-dasharray="2,1.5"/>
+          <text x="375" y="138" font-size="11" fill="#444">34&times;</text>
+
+          <text x="102" y="194" text-anchor="end" font-weight="600">crAPI</text>
+          <rect x="110" y="180" width="310" height="12" fill="#c9c9c9"/>
+          <rect x="110" y="196" width="87" height="12" fill="#6d28d9"/>
+          <line x1="217" y1="196" x2="217" y2="208" stroke="#6d28d9" stroke-width="2"/><line x1="228" y1="194" x2="228" y2="210" stroke="#6d28d9" stroke-width="1.2" stroke-dasharray="2,1.5"/>
+          <text x="426" y="190" font-size="11" fill="#444">40&times;</text>
+        </g>
+        <g font-size="10.5" fill="#333">
+          <rect x="300" y="4" width="10" height="8" fill="#c9c9c9"/><text x="314" y="11">whole codebase</text>
+          <rect x="410" y="4" width="10" height="8" fill="#6d28d9"/><text x="424" y="11">median route slice</text>
+        </g>
+      </svg>
+      <figcaption><b>Figure 3.</b> Context per review. Grey: the indexed codebase. Purple: the median slice; solid tick: 90th
+        percentile; dashed tick: largest slice. Labels give the median reduction. Note the logarithmic axis: the slices sit one to two
+        orders of magnitude below the codebase.</figcaption>
+    </figure>
+    <p>These applications are small by industrial standards, which makes the result conservative: by Equation&nbsp;(3), slice size
+      tracks route complexity rather than repository size, so the reduction factor should grow roughly in proportion to the codebase.
+      A repository a hundred times larger than aegra would not need slices a hundred times larger; it would need a hundred times more
+      of them, each judged independently and in parallel.</p>
+
+    <h2>6&nbsp;&nbsp;Discussion: Why Route Slicing Works</h2>
+    <p><b>It aligns the unit of analysis with the unit of vulnerability.</b> A BOLA is, by definition, a property of one route
+      (Observation&nbsp;1). Reviewing a slice therefore asks the model exactly the question that defines the bug, with exactly the code
+      that decides it, rather than asking it to rediscover the program's structure.</p>
+    <p><b>It assigns each sub-problem to the right tool.</b> Determining which code runs for a route is a structural question that
+      static analysis answers deterministically, cheaply and reproducibly. Deciding whether that code ties an object to its owner is a
+      semantic question that models answer well and pattern-matchers cannot. Neither component is asked to do the other's job.</p>
+    <p><b>It closes the world.</b> Detecting a <em>missing</em> check is hard in an open world, since the check could be anywhere. A
+      slice is a closed world: it contains the filters, guards and calls that run for the request, so the absence of an ownership check
+      in the slice is meaningful evidence, qualified only by the documented gaps in tracing. This is what lets a model reason about
+      negative space with confidence.</p>
+    <p><b>It scales by construction.</b> Slices are bounded independently of codebase size (§4.5), independent of each other, and
+      batchable, so cost grows linearly with the number of routes and wall-clock time can be held constant by adding workers. No step
+      requires the whole program in one context.</p>
+    <p><b>It produces auditable output.</b> Every verdict cites <code>file:line</code> evidence inside a slice that can be shown to a
+      human reviewer alongside it, turning model output into a triage queue rather than an oracle.</p>
+
+    <h2>7&nbsp;&nbsp;Limitations and Threats to Validity</h2>
+    <ul>
+      <li><b>Entry points beyond HTTP routes.</b> GraphQL resolvers, WebSocket handlers, background jobs and message consumers are not
+        yet treated as entry points; the one miss in Table&nbsp;3 is of this kind. File-based routing (e.g. Next.js API routes) and some
+        routing styles are not yet discovered.</li>
+      <li><b>Static approximation of E(r).</b> Dynamic dispatch (<code>send</code>, <code>getattr</code>, metaprogramming) is not
+        followed, and calls through injected objects resolve by name, so a slice can miss a check (risking false positives) or include an
+        unrelated same-named method. The judge is instructed to lower confidence when decisive code is absent.</li>
+      <li><b>Intent.</b> Whether open access to an object is a bug or a feature cannot always be decided from code alone: public
+        profiles and shared links are fetched exactly like private records. Such cases surface as flags for human review.</li>
+      <li><b>Scope of the bug class.</b> The judge targets object-level authorization. It often reports adjacent issues (missing admin
+        checks, mass assignment, unsafe deserialization), but does not search for them systematically.</li>
+      <li><b>Benchmark size and variance.</b> The evaluation covers 25 known BOLAs in four applications, each run once with one model.
+        Model verdicts vary between runs and models, and part of the ground truth comes from our own code review. The results show the
+        approach is effective; they do not establish precise error rates for industrial codebases.</li>
+    </ul>
+
+    <h2>8&nbsp;&nbsp;Availability</h2>
+    <p>The tracer, the judge, the benchmark harness with its ground-truth labels, and the latest results are open source
+      [11]; a narrative account of the project's motivation appears in [12]. Variablee's hosted scanner, built on this pipeline,
+      runs the static phase when a repository is submitted and the semantic phase on demand, so that every route's trace can be
+      inspected before any model is consulted.</p>
+
+    <h2>9&nbsp;&nbsp;Conclusion</h2>
+    <p>Whole-codebase BOLA detection looks like a problem too large for a model's context. It is not one problem but many small ones:
+      because BOLA is route-local, the program decomposes into per-route slices that each fit comfortably in context and can each be
+      judged on their own. Route-sliced context makes this decomposition practical across languages and frameworks, keeps the context
+      per review bounded independently of codebase size, and on our benchmark detects 24 of 25 known BOLAs with a single false positive
+      on known-safe routes. We expect the same principle (find the unit at which a vulnerability is defined, and give the model exactly
+      that unit) to extend to other authorization flaws and other entry points.</p>
+
+    <h2>References</h2>
+    <div class="refs">
+      <ol>
+        <li>OWASP Foundation. <i>OWASP API Security Top 10 – 2023.</i> API1:2023 Broken Object Level Authorization. owasp.org/API-Security.</li>
+        <li>M. Weiser. Program Slicing. <i>IEEE Transactions on Software Engineering</i>, SE-10(4):352–357, 1984.</li>
+        <li>F. Sun, L. Xu, Z. Su. Static Detection of Access Control Vulnerabilities in Web Applications. In <i>Proc. 20th USENIX Security Symposium</i>, 2011.</li>
+        <li>M. Monshizadeh, P. Naldurg, V. N. Venkatakrishnan. MACE: Detecting Privilege Escalation Vulnerabilities in Web Applications. In <i>Proc. ACM CCS</i>, 2014.</li>
+        <li>N. F. Liu, K. Lin, J. Hewitt, A. Paranjape, M. Bevilacqua, F. Petroni, P. Liang. Lost in the Middle: How Language Models Use Long Contexts. <i>Transactions of the ACL</i>, 12, 2024.</li>
+        <li>OWASP RailsGoat: a deliberately vulnerable Ruby on Rails application. github.com/OWASP/railsgoat.</li>
+        <li>OWASP crAPI: Completely Ridiculous API, v1.1.6. github.com/OWASP/crAPI.</li>
+        <li>dvws-node: Damn Vulnerable Web Services. github.com/snoopysecurity/dvws-node.</li>
+        <li>aegra v0.9.6 and CVE-2026-44504. github.com/aegra/aegra.</li>
+        <li>V. B. Livshits, M. S. Lam. Finding Security Vulnerabilities in Java Applications with Static Analysis. In <i>Proc. 14th USENIX Security Symposium</i>, 2005.</li>
+        <li>Variablee. Route tracer and BOLA analyzer: source code, benchmark and results. github.com/sellarafaeli/ai_sast.</li>
+        <li>S. Rafaeli. AI-native SAST for IDOR/BOLA. sellarafaeli.com/blog/ai_native_sast_for_idor_bola, November 2026.</li>
+      </ol>
+    </div>
+  </div>
+</article>
+</body>
+</html>

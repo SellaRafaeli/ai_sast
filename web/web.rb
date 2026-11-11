@@ -394,10 +394,6 @@ LEGAL = {
     ["Sharing", "Repository code is sent to an AI model provider to analyze it. We don't sell your data."],
     ["Contact", "Contact details will be added here."]
   ]],
-  "whitepaper" => ["White paper", [
-    ["Coming soon", "The BOLA Detector white paper covers how the engine maps routes across very large code bases, how frontier models reason about object-level authorization, and our benchmark against real applications with known BOLA / IDOR vulnerabilities."],
-    ["In the meantime", "Read the blog post and the open-source project on GitHub, linked at the bottom of this page."]
-  ]],
   "tos" => ["Terms of Service", [
     ["Using BOLA Detector", "Only scan repositories you're allowed to analyze. Results are automated estimates from a static trace of the code, for manual review; they aren't proof that a bug exists or doesn't."],
     ["No warranty", "The service is provided as is, without any warranty."],
@@ -405,11 +401,17 @@ LEGAL = {
   ]]
 }.freeze
 
-%w[privacy tos terms whitepaper].each do |page|
+%w[privacy tos terms].each do |page|
   get "/#{page}" do
     @title, @sections = LEGAL.fetch(page == "terms" ? "tos" : page)
     erb :legal
   end
+end
+
+# The white paper: a standalone academic page (public/whitepaper.html) and its PDF (public/whitepaper.pdf,
+# rebuilt with web/build_whitepaper_pdf).
+get "/whitepaper" do
+  send_file File.join(settings.public_folder, "whitepaper.html")
 end
 
 # Step 1: send the visitor to Google, with a one-time `state` to match on the way back.
@@ -1138,7 +1140,7 @@ __END__
 
 @@ resource_links
 <div class="res-links">
-  <a href="<%= LINKS[:whitepaper] %>">📄 See the white paper <span class="soon">soon</span></a>
+  <a href="<%= LINKS[:whitepaper] %>">📄 Read the white paper</a>
   <a href="<%= LINKS[:blog] %>" target="_blank" rel="noopener">✍️ Read the blog post</a>
   <a href="<%= LINKS[:github] %>" target="_blank" rel="noopener">⭐ GitHub</a>
   <a href="<%= LINKS[:variablee] %>" target="_blank" rel="noopener">🌐 variablee.com</a>
