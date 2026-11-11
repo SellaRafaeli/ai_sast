@@ -5,7 +5,7 @@
     "source": "CVE-2026-44504 / GHSA-m98r-6667-4wq7",
     "status": "ok",
     "routes_traced": 44,
-    "routes_flagged": 7,
+    "routes_flagged": 6,
     "vulnerable": [
       {
         "route": "POST /threads/{thread_id}/runs",
@@ -43,25 +43,25 @@
         "route": "DELETE /threads/{thread_id}",
         "result": "ok",
         "verdict": "unlikely",
-        "score": 6
+        "score": 5
       },
       {
         "route": "GET /threads/{thread_id}/state",
         "result": "ok",
         "verdict": "unlikely",
-        "score": 8
+        "score": 6
       },
       {
         "route": "GET /threads/{thread_id}/state/{checkpoint_id}",
         "result": "ok",
         "verdict": "unlikely",
-        "score": 12
+        "score": 10
       },
       {
         "route": "POST /threads/{thread_id}/history",
         "result": "ok",
         "verdict": "unlikely",
-        "score": 6
+        "score": 10
       },
       {
         "route": "GET /threads/{thread_id}/runs/{run_id}",
@@ -79,7 +79,7 @@
         "route": "DELETE /threads/{thread_id}/runs/{run_id}",
         "result": "ok",
         "verdict": "unlikely",
-        "score": 10
+        "score": 8
       },
       {
         "route": "GET /threads/{thread_id}/runs/{run_id}/join",
@@ -102,43 +102,38 @@
     ],
     "unlabeled": [
       {
-        "route": "POST /runs",
-        "verdict": "likely",
-        "score": 90
-      },
-      {
         "route": "POST /runs/stream",
         "verdict": "likely",
-        "score": 90
+        "score": 85
       },
       {
         "route": "POST /runs/wait",
         "verdict": "likely",
-        "score": 90
+        "score": 85
       },
       {
-        "route": "POST /threads/{thread_id}/state",
+        "route": "POST /runs",
         "verdict": "possible",
-        "score": 65
+        "score": 70
       }
     ],
-    "run_at": "2026-11-09T12:05:41Z",
+    "run_at": "2026-11-11T08:34:26Z",
     "model": "openai / gpt-5",
-    "scanner": "unknown"
+    "scanner": "cff4684"
   },
   "dvws-node": {
     "name": "dvws-node",
     "stack": "Node.js / Express",
     "source": "CHALLENGES.md #15, #19, #33, #39, #53",
     "status": "ok",
-    "routes_traced": 57,
+    "routes_traced": 48,
     "routes_flagged": 14,
     "vulnerable": [
       {
         "route": "GET /api/v2/notes/:noteId",
         "result": "detected",
         "verdict": "likely",
-        "score": 95
+        "score": 90
       },
       {
         "route": "PUT /api/v2/notes/:noteId",
@@ -156,7 +151,7 @@
         "route": "GET /api/v2/passphrase/:username",
         "result": "detected",
         "verdict": "likely",
-        "score": 95
+        "score": 100
       },
       {
         "route": "POST /api/v2/account-recovery/reset",
@@ -182,7 +177,7 @@
       {
         "route": "POST /api/v2/users/profile/import/xml",
         "verdict": "likely",
-        "score": 95
+        "score": 98
       },
       {
         "route": "GET /api/v2/users/:id/profile-details",
@@ -197,32 +192,32 @@
       {
         "route": "GET /api/v2/users/ldap-search",
         "verdict": "likely",
-        "score": 88
+        "score": 85
       },
       {
         "route": "POST /api/v2/users/ldap-search",
         "verdict": "likely",
-        "score": 88
+        "score": 85
       },
       {
         "route": "POST /api/v2/account-recovery/lookup",
         "verdict": "possible",
-        "score": 55
-      },
-      {
-        "route": "GET /api/v2/reports/monthly",
-        "verdict": "possible",
-        "score": 45
+        "score": 60
       },
       {
         "route": "POST /api/download",
         "verdict": "possible",
         "score": 45
+      },
+      {
+        "route": "GET /api/v2/reports/monthly",
+        "verdict": "possible",
+        "score": 40
       }
     ],
-    "run_at": "2026-11-09T12:23:34Z",
+    "run_at": "2026-11-11T09:07:17Z",
     "model": "openai / gpt-5",
-    "scanner": "unknown"
+    "scanner": "c077c13"
   },
   "railsgoat": {
     "name": "railsgoat",
@@ -230,7 +225,7 @@
     "source": "OWASP RailsGoat: spec/vulnerabilities + code review",
     "status": "ok",
     "routes_traced": 42,
-    "routes_flagged": 11,
+    "routes_flagged": 9,
     "vulnerable": [
       {
         "route": "GET /users/:user_id/work_info",
@@ -242,7 +237,7 @@
         "route": "PATCH /users/:id",
         "result": "detected",
         "verdict": "likely",
-        "score": 100
+        "score": 95
       },
       {
         "route": "GET /users/:user_id/messages/:id",
@@ -260,7 +255,7 @@
         "route": "POST /users/:user_id/messages",
         "result": "detected",
         "verdict": "likely",
-        "score": 90
+        "score": 95
       },
       {
         "route": "DELETE /users/:user_id/pay/:id",
@@ -278,7 +273,7 @@
         "route": "GET /api/v1/mobile/:id",
         "result": "detected",
         "verdict": "likely",
-        "score": 100
+        "score": 95
       }
     ],
     "safe": [
@@ -286,7 +281,7 @@
         "route": "GET /users/:user_id/account_settings",
         "result": "ok",
         "verdict": "unlikely",
-        "score": 5
+        "score": 0
       },
       {
         "route": "GET /users/:user_id/retirement",
@@ -316,13 +311,13 @@
         "route": "GET /users/:user_id/pay/:id",
         "result": "ok",
         "verdict": "unlikely",
-        "score": 5
+        "score": 10
       },
       {
         "route": "POST /users/:user_id/pay/update_dd_info",
         "result": "ok",
         "verdict": "unlikely",
-        "score": 5
+        "score": 10
       },
       {
         "route": "GET /schedule/get_pto_schedule",
@@ -330,9 +325,9 @@
       },
       {
         "route": "GET /api/v1/users/:id",
-        "result": "false_positive",
-        "verdict": "possible",
-        "score": 35
+        "result": "ok",
+        "verdict": "unlikely",
+        "score": 10
       }
     ],
     "unlabeled": [
@@ -340,16 +335,11 @@
         "route": "POST /password_resets",
         "verdict": "likely",
         "score": 95
-      },
-      {
-        "route": "GET /download",
-        "verdict": "likely",
-        "score": 90
       }
     ],
-    "run_at": "2026-11-09T12:52:31Z",
+    "run_at": "2026-11-11T09:09:51Z",
     "model": "openai / gpt-5",
-    "scanner": "6ca0e81-dirty"
+    "scanner": "c077c13"
   },
   "crapi-workshop": {
     "name": "crapi-workshop",
@@ -363,7 +353,7 @@
         "route": "GET /workshop/api/mechanic/mechanic_report",
         "result": "detected",
         "verdict": "likely",
-        "score": 90
+        "score": 95
       },
       {
         "route": "GET /workshop/api/shop/orders/<order_id>",
@@ -381,7 +371,7 @@
         "route": "PUT /workshop/api/mechanic/service_request/<service_request_id>",
         "result": "detected",
         "verdict": "likely",
-        "score": 95
+        "score": 98
       },
       {
         "route": "GET /workshop/api/mechanic/service_request/<service_request_id>/comment",
@@ -393,13 +383,13 @@
         "route": "POST /workshop/api/mechanic/service_request/<service_request_id>/comment",
         "result": "detected",
         "verdict": "possible",
-        "score": 45
+        "score": 40
       },
       {
         "route": "GET /workshop/api/merchant/service_requests/<vin>",
         "result": "detected",
         "verdict": "likely",
-        "score": 92
+        "score": 90
       }
     ],
     "safe": [
@@ -407,13 +397,13 @@
         "route": "PUT /workshop/api/shop/orders/<order_id>",
         "result": "ok",
         "verdict": "unlikely",
-        "score": 10
+        "score": 15
       },
       {
         "route": "POST /workshop/api/shop/orders/return_order",
         "result": "ok",
         "verdict": "unlikely",
-        "score": 10
+        "score": 15
       },
       {
         "route": "GET /workshop/api/shop/orders/all",
@@ -431,7 +421,7 @@
         "route": "POST /workshop/api/shop/apply_coupon",
         "result": "ok",
         "verdict": "unlikely",
-        "score": 5
+        "score": 10
       },
       {
         "route": "GET /workshop/api/mechanic/service_requests",
@@ -455,7 +445,7 @@
       {
         "route": "GET /workshop/api/mechanic/receive_report",
         "verdict": "likely",
-        "score": 90
+        "score": 92
       },
       {
         "route": "GET /workshop/api/mechanic/download_report",
@@ -463,8 +453,8 @@
         "score": 85
       }
     ],
-    "run_at": "2026-11-10T11:28:04Z",
+    "run_at": "2026-11-11T09:11:46Z",
     "model": "openai / gpt-5",
-    "scanner": "269842f-dirty"
+    "scanner": "f447f24"
   }
 }

@@ -1065,7 +1065,13 @@ __END__
   .nav a { color: rgba(255,255,255,.88); } .nav a:hover { color: #fff; text-decoration: none; }
   .nav a { white-space: nowrap; }
   /* phones: links on their own full-width row under the logo, wrapping to a second row instead of squeezing */
-  @media (max-width: 760px) { .nav { order: 3; width: 100%; margin-left: 0; flex-wrap: wrap; gap: 10px 18px; } }
+  /* phones: the six links as a 3x2 grid of equal tiles under the logo; "Contact us" is the white one */
+  @media (max-width: 760px) {
+    .nav { order: 3; width: 100%; margin-left: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; align-items: stretch; }
+    .nav a { display: flex; align-items: center; justify-content: center; text-align: center; padding: 10px 6px;
+             border-radius: 12px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22); }
+    .nav a.nav-cta { padding: 10px 6px; border-radius: 12px; background: #fff; border-color: #fff; }
+  }
   .login-card .google-btn { display: flex; justify-content: center; width: 100%; margin-top: 0; border: 0; cursor: pointer; font: inherit; font-weight: 700; font-size: 16px; }
   .login-card .google-btn + .google-btn { margin-top: 10px; }
   .login-card .sso { background: #19172b; color: #fff; }
@@ -1148,7 +1154,7 @@ __END__
   footer a { color: var(--muted); text-decoration: underline; }
   .foot-links { margin-bottom: 6px; font-weight: 500; }
   .eyebrow { display: inline-block; margin-top: 28px; padding: 5px 12px; border-radius: 99px; font-size: 12px; font-weight: 700;
-             letter-spacing: .08em; text-transform: uppercase; background: rgba(255,255,255,.18); }
+             letter-spacing: .08em; text-transform: uppercase; background: rgba(255,255,255,.18); text-align: center; }
   .eyebrow + h1 { margin-top: 14px; }
   .hero p.fine { margin: 10px 0 0; font-size: 13px; opacity: .9; }
   .res-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }

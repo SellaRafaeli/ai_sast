@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finding Notification</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f5fb; --surface: #ffffff; --surface-2: #f1f0f7; --fg: #19172b; --muted: #6b6880; --line: #e6e4ef;
+    --accent: #7c3aed; --accent-bg: #f3edff;
+    --amber: #b45309; --amber-bg: #fff8eb;
+    --red: #e11d48; --red-bg: #fff1f3; --green: #059669; --green-bg: #ecfdf5;
+    --diff-add: #e8f8ef; --diff-add-fg: #0b6b45; --diff-del: #fdecee; --diff-del-fg: #a3123a;
+    --code-bg: #faf9fd; --term-bg: #17151f; --term-fg: #d9d6e8; --scrim: rgba(25, 23, 43, .36);
+    --shadow: 0 2px 4px rgba(25,23,43,.06), 0 24px 64px rgba(25,23,43,.2);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f0e17; --surface: #1a1826; --surface-2: #232133; --fg: #f3f2fa; --muted: #a29fb8; --line: #2e2b40;
+      --accent: #a78bfa; --accent-bg: #251d3d;
+      --amber: #fbbf24; --amber-bg: #2a2112;
+      --red: #fb7185; --red-bg: #2a1520; --green: #34d399; --green-bg: #0f2620;
+      --diff-add: #10291f; --diff-add-fg: #6ee7b7; --diff-del: #2d1520; --diff-del-fg: #fda4af;
+      --code-bg: #14131e; --term-bg: #0c0b12; --term-fg: #d9d6e8; --scrim: rgba(5, 4, 12, .66);
+      --shadow: 0 2px 4px rgba(0,0,0,.3), 0 24px 64px rgba(0,0,0,.55);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f0e17; --surface: #1a1826; --surface-2: #232133; --fg: #f3f2fa; --muted: #a29fb8; --line: #2e2b40;
+    --accent: #a78bfa; --accent-bg: #251d3d;
+    --amber: #fbbf24; --amber-bg: #2a2112;
+    --red: #fb7185; --red-bg: #2a1520; --green: #34d399; --green-bg: #0f2620;
+    --diff-add: #10291f; --diff-add-fg: #6ee7b7; --diff-del: #2d1520; --diff-del-fg: #fda4af;
+    --code-bg: #14131e; --term-bg: #0c0b12; --term-fg: #d9d6e8; --scrim: rgba(5, 4, 12, .66);
+    --shadow: 0 2px 4px rgba(0,0,0,.3), 0 24px 64px rgba(0,0,0,.55);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--fg); font: 15px/1.55 Inter, -apple-system, system-ui, sans-serif;
+         -webkit-font-smoothing: antialiased; min-height: 100vh; }
+  code, .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; font-variant-ligatures: none; }
+  button { font: inherit; cursor: pointer; }
+
+  /* ── faux app behind the notification ── */
+  .app { max-width: 1040px; margin: 0 auto; padding: 28px 16px; }
+  .app-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .02em; }
+  .logo { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px;
+          background: linear-gradient(135deg, #7c3aed, #db2777); flex: none; }
+  .product { color: var(--accent); }
+  .ghost-row { height: 64px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); margin-bottom: 12px; }
+  .ghost-row:nth-child(2) { width: 92%; } .ghost-row:nth-child(3) { width: 84%; }
+  .reopen { padding: 8px 14px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); font-size: 13px; font-weight: 600; }
+  .reopen[hidden] { display: none; }
+
+  /* ── overlay ── */
+  .scrim { position: fixed; inset: 0; background: var(--scrim); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+           display: flex; align-items: flex-start; justify-content: center; padding: 48px 16px; overflow-y: auto;
+           animation: fade .2s ease-out; z-index: 10; }
+  .scrim[hidden] { display: none; }
+  @keyframes fade { from { opacity: 0; } }
+  @keyframes rise { from { opacity: 0; transform: translateY(12px) scale(.99); } }
+
+  .card { position: relative; width: 100%; max-width: 640px; background: var(--surface); border: 1px solid var(--line);
+          border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; animation: rise .28s cubic-bezier(.2,.8,.2,1); }
+
+  .close { position: absolute; top: 14px; right: 14px; width: 32px; height: 32px; border-radius: 9px; border: 0;
+           background: transparent; color: var(--muted); display: grid; place-items: center; transition: background .15s, color .15s; }
+  .close:hover { background: var(--surface-2); color: var(--fg); }
+  .close:focus-visible, .btn:focus-visible, .btn-2:focus-visible, .linkish:focus-visible, .toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .head { padding: 22px 24px 0; }
+  .from { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); padding-right: 40px; }
+  .from .logo { width: 20px; height: 20px; border-radius: 6px; }
+  .from b { color: var(--fg); font-weight: 600; }
+  h1 { margin: 16px 0 6px; font-size: 19px; line-height: 1.35; letter-spacing: -.005em; font-weight: 650; text-wrap: balance; }
+  .lede { margin: 0; color: var(--muted); font-size: 14.5px; }
+
+  /* at-a-glance facts */
+  .facts { display: grid; grid-template-columns: repeat(4, auto); justify-content: start; gap: 6px 28px; margin: 16px 0 0; padding: 0; }
+  .facts div { min-width: 0; }
+  .facts dt { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .facts dd { margin: 2px 0 0; font-size: 13.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .tag { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 99px; font-size: 12.5px; font-weight: 600; }
+  .tag.amber { background: var(--amber-bg); color: var(--amber); }
+  .tag.ready { background: var(--accent-bg); color: var(--accent); }
+  .tag.ready::before, .tag.amber::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .stat .a { color: var(--green); } .stat .d { color: var(--red); }
+
+  .routes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+  .route { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 7px;
+           background: var(--surface-2); border: 1px solid var(--line); font-size: 12px; }
+  .route b { color: var(--accent); font-weight: 600; }
+
+  /* details toggle */
+  .toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: calc(100% - 48px); margin: 18px 24px 0;
+            padding: 11px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); text-align: left;
+            transition: background .15s, border-color .15s; }
+  .toggle:hover { background: var(--surface-2); }
+  .toggle .t1 { font-weight: 600; font-size: 14px; }
+  .toggle .t2 { font-size: 12.5px; color: var(--muted); }
+  .toggle .chev { flex: none; color: var(--muted); transition: transform .2s; }
+  .toggle[aria-expanded="true"] .chev { transform: rotate(180deg); }
+  .toggle[aria-expanded="true"] { border-bottom-left-radius: 0; border-bottom-right-radius: 0; background: var(--surface-2); }
+
+  .details { margin: 0 24px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 12px 12px; padding: 0 18px; }
+  .details[hidden] { display: none; }
+  section { padding: 18px 0; border-top: 1px solid var(--line); }
+  section:first-child { border-top: 0; }
+  h2 { margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+  p { margin: 0 0 10px; font-size: 14px; } p:last-child { margin-bottom: 0; }
+  p code, li code { padding: 1px 5px; border-radius: 5px; background: var(--surface-2); border: 1px solid var(--line); font-size: 12px; }
+  .muted { color: var(--muted); }
+
+  /* missing check comparison */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .pane { border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; background: var(--code-bg); min-width: 0; }
+  .pane-h { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; margin-bottom: 8px; color: var(--muted); }
+  .pane-h .i { font-weight: 700; }
+  .pane.ok .pane-h .i { color: var(--green); } .pane.bad .pane-h .i { color: var(--amber); }
+  .pane .mono { display: block; font-size: 12px; line-height: 1.7; color: var(--muted); white-space: pre; overflow-x: auto; }
+  .pane .mono mark { background: var(--green-bg); color: var(--green); border-radius: 4px; padding: 0 3px; }
+  .pane .mono .gap { color: var(--amber); background: var(--amber-bg); border-radius: 4px; padding: 0 3px; font-style: italic; }
+  .tally { margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .tally strong { color: var(--fg); }
+
+  /* diff */
+  .diff { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--code-bg); }
+  .diff-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 13px;
+            border-bottom: 1px solid var(--line); background: var(--surface-2); font-size: 12.5px; }
+  .code { margin: 0; padding: 8px 0; overflow-x: auto; font-size: 12px; line-height: 1.65; }
+  .ln { display: block; padding: 0 14px 0 0; white-space: pre; min-width: max-content; }
+  .ln::before { content: attr(data-s); display: inline-block; width: 26px; text-align: center; color: var(--muted); opacity: .7; }
+  .ln.add { background: var(--diff-add); color: var(--diff-add-fg); } .ln.add::before { color: var(--diff-add-fg); opacity: 1; }
+  .ln.del { background: var(--diff-del); color: var(--diff-del-fg); } .ln.del::before { color: var(--diff-del-fg); opacity: 1; }
+  .ln.hunk { color: var(--accent); opacity: .85; padding-top: 4px; padding-bottom: 4px; }
+  .diff-more { padding: 8px 13px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+  .notes { display: grid; gap: 5px; margin: 12px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--muted); }
+  .notes li { display: flex; gap: 8px; align-items: baseline; }
+  .notes li::before { content: "✓"; color: var(--green); font-weight: 700; }
+
+  /* proof of concept */
+  .poc-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+  .poc-row p { flex: 1 1 260px; }
+  .btn-2 { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px;
+           background: var(--surface); color: var(--fg); font-weight: 600; font-size: 13.5px; transition: background .15s, border-color .15s; }
+  .btn-2:hover { background: var(--surface-2); }
+  .btn-2[disabled] { cursor: default; color: var(--muted); }
+  .term { margin: 12px 0 0; padding: 12px 14px; border-radius: 10px; background: var(--term-bg); color: var(--term-fg);
+          font-size: 12px; line-height: 1.75; overflow-x: auto; white-space: pre; }
+  .term[hidden] { display: none; }
+  .term .dim { color: #8a86a3; } .term .out { color: #c4b5fd; } .term .in { color: #fbbf24; } .term .ok { color: #6ee7b7; }
+  .term .line { display: block; opacity: 0; animation: show .2s forwards; }
+  @keyframes show { to { opacity: 1; } }
+  .poc-result { display: none; margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--amber-bg); color: var(--amber); font-size: 13px; font-weight: 600; }
+  .poc-result.show { display: block; }
+  .poc-result span { font-weight: 400; color: var(--fg); opacity: .8; }
+
+  /* footer */
+  .foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+          padding: 16px 24px 18px; margin-top: 20px; border-top: 1px solid var(--line); background: var(--surface-2); }
+  .foot-note { font-size: 12.5px; color: var(--muted); max-width: 300px; }
+  .foot-note code { white-space: nowrap; font-size: 12px; }
+  .actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+  .linkish { border: 0; background: none; color: var(--muted); font-weight: 600; font-size: 14px; padding: 9px 8px; border-radius: 8px; }
+  .linkish:hover { color: var(--fg); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 10px; padding: 10px 18px;
+         font-weight: 600; font-size: 14px; color: #fff; background: #7c3aed; box-shadow: 0 1px 2px rgba(25,23,43,.12);
+         transition: background .12s, transform .12s; }
+  .btn:hover { background: #6d28d9; }
+  .btn:active { transform: translateY(1px); }
+  .btn[disabled] { cursor: default; opacity: .85; }
+  .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(127,127,127,.35); border-top-color: currentColor; animation: rot .7s linear infinite; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+
+  .done-banner { display: none; align-items: center; gap: 10px; padding: 15px 24px; margin-top: 20px; background: var(--green-bg); color: var(--green);
+                 border-top: 1px solid var(--line); font-size: 14px; font-weight: 600; }
+  .done-banner a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+  .card.approved .done-banner { display: flex; }
+  .card.approved .foot { display: none; }
+
+  @media (prefers-reduced-motion: reduce) { .scrim, .card, .term .line { animation: none; opacity: 1; } .toggle .chev { transition: none; } }
+
+  @media (max-width: 560px) {
+    .scrim { padding: 16px; }
+    .head { padding: 18px 18px 0; } .toggle { width: calc(100% - 36px); margin: 16px 18px 0; } .details { margin: 0 18px; padding: 0 14px; }
+    .foot { padding: 14px 18px 16px; } .done-banner { padding: 14px 18px; }
+    h1 { font-size: 18px; }
+    .facts { grid-template-columns: repeat(2, auto); gap: 10px 28px; }
+    .compare { grid-template-columns: 1fr; }
+    .actions { width: 100%; justify-content: space-between; margin-left: 0; }
+    .foot-note { max-width: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Placeholder dashboard so the overlay has context. -->
+<div class="app" aria-hidden="true">
+  <div class="app-bar">
+    <span class="brand"><span class="logo"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M5 6l7 13 7-13" stroke="#fff" stroke-width="2.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Variablee <span class="product">Code</span></span>
+    <button class="reopen" id="reopen" hidden>Show notification</button>
+  </div>
+  <div class="ghost-row"></div><div class="ghost-row"></div><div class="ghost-row"></div><div class="ghost-row"></div>
+</div>
+
+<div class="scrim" id="scrim">
+  <article class="card" id="card" role="dialog" aria-modal="true" aria-labelledby="f-title" aria-describedby="f-lede">
+    <button class="close" id="close" aria-label="Close">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+
+    <header class="head">
+      <div class="from">
+        <span class="logo"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M5 6l7 13 7-13" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span><b>Daily scan</b> · acme/agent-api · Nov 11</span>
+      </div>
+      <h1 id="f-title">Ownership check missing on 3 thread routes</h1>
+      <p class="lede" id="f-lede">These routes let a signed-in user start a run on a thread that belongs to someone else. We've drafted a fix that uses the same check as your other thread routes.</p>
+
+      <dl class="facts">
+        <div><dt>Type</dt><dd>BOLA</dd></div>
+        <div><dt>Severity</dt><dd><span class="tag amber">High</span></dd></div>
+        <div><dt>Confidence</dt><dd>95%</dd></div>
+        <div><dt>Fix</dt><dd><span class="tag ready">Ready for review</span></dd></div>
+      </dl>
+
+      <div class="routes">
+        <span class="route mono"><b>POST</b> /threads/{thread_id}/runs</span>
+        <span class="route mono"><b>POST</b> /threads/{thread_id}/runs/stream</span>
+        <span class="route mono"><b>POST</b> /threads/{thread_id}/runs/wait</span>
+      </div>
+    </header>
+
+    <button class="toggle" id="toggle" aria-expanded="false" aria-controls="details">
+      <span><span class="t1" id="toggle-label">Show details</span><br><span class="t2">Explanation, code diff, proof of concept</span></span>
+      <svg class="chev" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
+    <div class="details" id="details" hidden>
+      <section>
+        <h2>What's happening</h2>
+        <p>Each route reads <code>thread_id</code> from the URL, loads that thread, and starts a run on it. The caller must be signed in, but the route doesn't check that the thread belongs to them.</p>
+        <p class="muted">So a run can read and add to another user's thread history if the caller knows or guesses its ID.</p>
+      </section>
+
+      <section>
+        <h2>What's missing</h2>
+        <p>Your other <code>/threads/{thread_id}</code> routes filter by owner. These three load the thread by ID alone.</p>
+        <div class="compare">
+          <div class="pane ok">
+            <div class="pane-h"><span class="i">✓</span> GET /threads/{thread_id}</div>
+            <span class="mono">select(ThreadORM).where(
+  ThreadORM.thread_id == thread_id,
+  <mark>ThreadORM.user_id == user.identity</mark>
+)</span>
+          </div>
+          <div class="pane bad">
+            <div class="pane-h"><span class="i">!</span> POST /threads/{thread_id}/runs</div>
+            <span class="mono">session.get(ThreadORM, thread_id)
+
+<span class="gap">no owner filter</span></span>
+          </div>
+        </div>
+        <p class="tally"><strong>12 of 15</strong> thread routes check ownership. These 3 don't.</p>
+      </section>
+
+      <section>
+        <h2>Proposed fix</h2>
+        <div class="diff">
+          <div class="diff-h">
+            <span class="mono">api/runs.py</span>
+            <span class="stat mono"><span class="a">+14</span> <span class="d">−9</span></span>
+          </div>
+<pre class="code mono"><span class="ln hunk" data-s=" ">@@ helper, shared by all three routes @@</span><span class="ln add" data-s="+">async def get_thread_for_user(session, thread_id, user):</span><span class="ln add" data-s="+">    thread = await session.scalar(</span><span class="ln add" data-s="+">        select(ThreadORM).where(</span><span class="ln add" data-s="+">            ThreadORM.thread_id == thread_id,</span><span class="ln add" data-s="+">            ThreadORM.user_id == user.identity,</span><span class="ln add" data-s="+">        )</span><span class="ln add" data-s="+">    )</span><span class="ln add" data-s="+">    if not thread:</span><span class="ln add" data-s="+">        raise HTTPException(404, "Thread not found")</span><span class="ln add" data-s="+">    return thread</span><span class="ln" data-s=" "> </span><span class="ln hunk" data-s=" ">@@ @router.post("/threads/{thread_id}/runs") @@</span><span class="ln" data-s=" ">async def create_run(thread_id, body, user):</span><span class="ln del" data-s="−">    thread = await session.get(ThreadORM, thread_id)</span><span class="ln del" data-s="−">    if not thread:</span><span class="ln del" data-s="−">        raise HTTPException(404, "Thread not found")</span><span class="ln add" data-s="+">    thread = await get_thread_for_user(session, thread_id, user)</span><span class="ln" data-s=" ">    return await start_run(session, thread, body, user)</span></pre>
+          <div class="diff-more">Same one-line change in <code class="mono">/runs/stream</code> and <code class="mono">/runs/wait</code>.</div>
+        </div>
+        <ul class="notes">
+          <li>Same owner filter your other 12 thread routes use.</li>
+          <li>Returns 404 rather than 403, so thread IDs can't be probed.</li>
+          <li>Includes a test: another user's request to each route gets 404.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Proof of concept</h2>
+        <div class="poc-row">
+          <p class="muted">Run it against <code>staging</code> with two test accounts. User B tries to start a run on user A's thread. Nothing touches production.</p>
+          <button class="btn-2" id="poc">
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 5l12 7-12 7z" fill="currentColor"/></svg>
+            <span>Run proof of concept</span>
+          </button>
+        </div>
+        <pre class="term mono" id="term" hidden></pre>
+        <div class="poc-result" id="poc-result" role="status" aria-live="polite">Confirmed on staging. <span>User B started a run on user A's thread (200 instead of 404).</span></div>
+      </section>
+    </div>
+
+    <footer class="foot">
+      <span class="foot-note">Approving opens a pull request on <code class="mono">fix/thread-run-ownership</code> for your review. Nothing merges automatically.</span>
+      <div class="actions">
+        <button class="linkish" id="later">Later</button>
+        <button class="btn" id="approve">Approve &amp; open PR</button>
+      </div>
+    </footer>
+    <div class="done-banner" role="status" aria-live="polite">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Pull request <a href="#">#482</a> is open for review. We'll re-scan these routes once it merges.</span>
+    </div>
+  </article>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const scrim = $('scrim'), card = $('card'), reopen = $('reopen');
+
+  function close() { scrim.hidden = true; reopen.hidden = false; reopen.focus(); }
+  function open() { scrim.hidden = false; reopen.hidden = true; $('close').focus(); }
+
+  $('close').addEventListener('click', close);
+  $('later').addEventListener('click', close);
+  reopen.addEventListener('click', open);
+  scrim.addEventListener('click', e => { if (e.target === scrim) close(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !scrim.hidden) close(); });
+
+  $('toggle').addEventListener('click', () => {
+    const t = $('toggle'), expanded = t.getAttribute('aria-expanded') === 'true';
+    t.setAttribute('aria-expanded', String(!expanded));
+    $('details').hidden = expanded;
+    $('toggle-label').textContent = expanded ? 'Show details' : 'Hide details';
+  });
+
+  // Simulated proof-of-concept run.
+  const POC = [
+    ['dim', '$ variablee poc --env staging --finding BOLA-0142'],
+    ['dim', '  signed in as test-user-a, test-user-b'],
+    ['out', '→ POST /threads   as test-user-a'],
+    ['in',  '← 200  thread_id=thr_7c41e9'],
+    ['out', '→ POST /threads/thr_7c41e9/runs   as test-user-b'],
+    ['in',  '← 200  run_id=run_19ab02   (expected 404)'],
+    ['out', '→ GET  /threads/thr_7c41e9/runs/run_19ab02   as test-user-a'],
+    ['in',  '← 200  status=running  started_by=test-user-b'],
+    ['ok',  '✓ reproduced in 1.8s'],
+  ];
+  $('poc').addEventListener('click', () => {
+    const btn = $('poc'), term = $('term');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin" aria-hidden="true"></span><span>Running…</span>';
+    term.hidden = false; term.innerHTML = '';
+    $('poc-result').classList.remove('show');
+    POC.forEach(([cls, text], i) => setTimeout(() => {
+      const s = document.createElement('span');
+      s.className = 'line ' + cls; s.textContent = text;
+      term.appendChild(s);
+      if (i === POC.length - 1) {
+        $('poc-result').classList.add('show');
+        btn.disabled = false;
+        btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 5l12 7-12 7z" fill="currentColor"/></svg><span>Run again</span>';
+      }
+    }, 250 + i * 260));
+  });
+
+  $('approve').addEventListener('click', () => {
+    const btn = $('approve');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin" aria-hidden="true"></span><span>Opening PR…</span>';
+    setTimeout(() => card.classList.add('approved'), 1000);
+  });
+
+  $('close').focus();
+</script>
+</body>
+</html>

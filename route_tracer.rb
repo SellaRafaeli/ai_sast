@@ -385,7 +385,12 @@ PY_INDEXER = <<~'PY'
           if isinstance(d, ast.Call) and call_of(d.func)[0] in ('Depends', 'Security'):
               dep.add(arg.arg)
       skip = {'self', 'cls', 'request', 'req', 'db', 'session', 'response', 'background_tasks'}
-      return [x.arg for x in pos + a.kwonlyargs if x.arg not in dep and x.arg not in skip]
+      # framework objects injected by type, whatever the argument is called (e.g. `_request: Request`)
+      framework_types = {'Request', 'Response', 'WebSocket', 'HTTPConnection', 'BackgroundTasks',
+                         'AsyncSession', 'Session', 'HttpRequest'}
+      def injected(x):
+          return x.annotation is not None and call_of(x.annotation)[0] in framework_types
+      return [x.arg for x in pos + a.kwonlyargs if x.arg not in dep and x.arg not in skip and not injected(x)]
 
   res = {'defs': [], 'classes': {}, 'routes': [], 'filters': []}
   django = {}  # urls.py rel path -> its entries: routes, or {'include': 'app.urls', 'prefix': 'api/'}
