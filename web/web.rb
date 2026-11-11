@@ -107,16 +107,23 @@ end
 
 # Send one email through Postmark's API in the background; a failure is only logged.
 def email(id, subject, details)
-  token = ENV["POSTMARK_API_TOKEN"].to_s
-  return if token.empty?
+  return if ENV["POSTMARK_API_TOKEN"].to_s.empty?
   scan = SCANS.find(_id: id).projection(repo_url: 1, base_url: 1, requested_by: 1).first or return
   name, = repo_name(scan["repo_url"])
   link = "#{scan['base_url']}/scans/#{id}"
   owner = scan["requested_by"] ? "#{scan['requested_by']['name']} <#{scan['requested_by']['email']}>" : "anonymous"
-  body = { "From" => POSTMARK_FROM, "To" => NOTIFY_EMAIL, "Subject" => "Variablee Code · #{name}: #{subject}",
-           "TextBody" => [subject, details, "Repo: #{scan['repo_url']}", "Scan started by: #{owner}", "Scan: #{link}",
-                          "— Variablee Code"].reject(&:empty?).join("\n\n"),
+  postmark_send("Variablee Code · #{name}: #{subject}",
+                [subject, details, "Repo: #{scan['repo_url']}", "Scan started by: #{owner}", "Scan: #{link}",
+                 "— Variablee Code"].reject(&:empty?).join("\n\n"))
+end
+
+# POST one email to NOTIFY_EMAIL through Postmark's API, in the background; a failure is only logged.
+def postmark_send(subject, text, reply_to: nil)
+  token = ENV["POSTMARK_API_TOKEN"].to_s
+  return if token.empty?
+  body = { "From" => POSTMARK_FROM, "To" => NOTIFY_EMAIL, "Subject" => subject, "TextBody" => text,
            "MessageStream" => "outbound" }
+  body["ReplyTo"] = reply_to if reply_to
   Thread.new do
     res = Net::HTTP.post(URI("https://api.postmarkapp.com/email"), JSON.dump(body),
                          "Accept" => "application/json", "Content-Type" => "application/json",
@@ -351,10 +358,11 @@ AUTH_ON              = !GOOGLE_CLIENT_ID.empty? && !GOOGLE_CLIENT_SECRET.empty?
 ALLOWED_EMAILS       = ENV["ALLOWED_EMAILS"].to_s.downcase.split(",").map(&:strip).reject(&:empty?)
 ALLOWED_DOMAINS      = ENV["ALLOWED_DOMAINS"].to_s.downcase.split(",").map(&:strip).reject(&:empty?)
 USERS                = DB[:users] # one document per person who signed in
+CONTACTS             = DB[:contacts] # messages sent through the contact form
 # Admins see every user's scans; everyone else sees only their own.
 ADMIN_EMAILS         = ENV.fetch("ADMIN_EMAILS", "sella.rafaeli@gmail.com").downcase.split(",").map(&:strip).reject(&:empty?)
 SCANS.indexes.create_one("requested_by.email" => 1, created_at: -1)
-PUBLIC_PATHS         = %w[/login /logout /auth/google /auth/google/callback /privacy /tos /terms /whitepaper /blog /__live].freeze
+PUBLIC_PATHS         = %w[/login /logout /auth/google /auth/google/callback /privacy /tos /terms /whitepaper /blog /__live /contact].freeze
 LINKS = { whitepaper: "/whitepaper", blog: "/blog", blog_post: "https://sellarafaeli.com/blog/ai_native_sast_for_idor_bola",
           github: "https://github.com/sellarafaeli/ai_sast", variablee: "https://variablee.com" }.freeze
 if AUTH_ON
@@ -409,12 +417,13 @@ LEGAL = {
         "Account information. When you sign in with Google we receive your name, email address and profile picture. We record when you first and last signed in and how many times.",
         "Scan information. For each scan we store the repository URL you submit, the commit scanned, who started the scan and who ran its analysis, timestamps, a log of the scan, and its results: the routes found, their call trees, and the findings, which can include short excerpts of the scanned code.",
         "Repository code. We clone the public repository you submit to analyze it. The clone is deleted as soon as the trace finishes. The trace of each route, including that route's code, is kept until you run the analysis (or until the scan is deleted), then deleted.",
+        "Contact requests. When you write to us through the contact form we receive your name, email address, company (if given) and message, and the page and IP address it was sent from.",
         "Technical information. We use a single cookie to keep you signed in. Our servers keep standard logs (such as IP addresses and request times) for security and troubleshooting."
       ]],
       ["How we use information", [
         "To run the scans you request and show you their results.",
         "To operate, secure and improve Variablee Code, including notifying our team when scans are started and completed.",
-        "To communicate with you about the service, if you contact us."
+        "To reply to messages you send us, and to communicate with you about the service."
       ]],
       ["AI analysis",
         "When you run an analysis, the traced code of each route is sent to a large language model provider (Anthropic or OpenAI) through its API to evaluate it. These providers process the code under their API terms. We do not send your account information to them."],
@@ -478,6 +487,53 @@ LEGAL = {
     @title = @legal[:title]
     erb :legal
   end
+end
+
+# ── contact form (bottom of every page) ──
+# Saved to Mongo `contacts` and emailed to NOTIFY_EMAIL with Reply-To set to the sender.
+# Spam guards: a hidden "website" field that people leave empty, and at most 5 messages per IP per hour.
+CONTACT_HITS = Hash.new { |h, k| h[k] = [] }
+CONTACT_LOCK = Mutex.new
+
+def contact_rate_limited?(ip)
+  CONTACT_LOCK.synchronize do
+    hits = CONTACT_HITS[ip].select! { |t| t > Time.now - 3600 } || CONTACT_HITS[ip]
+    return true if hits.size >= 5
+    hits << Time.now
+    false
+  end
+end
+
+post "/contact" do
+  back = params[:back].to_s
+  back = "/" unless back.start_with?("/") && !back.start_with?("//")
+  back = back.split("#").first
+  redirect to("#{back}#contact") unless params[:website].to_s.empty? # bot filled the hidden field: drop silently
+
+  f = %w[name email company message].to_h { |k| [k, params[k].to_s.strip] }
+  error =
+    if f["name"].empty? || f["name"].size > 100 then "Please enter your name."
+    elsif !f["email"].match?(/\A[^@\s]+@[^@\s]+\.[^@\s]+\z/) || f["email"].size > 200 then "Please enter a valid work email."
+    elsif f["company"].size > 150 then "Company name is too long."
+    elsif f["message"].size < 10 then "Please write a short message (at least 10 characters)."
+    elsif f["message"].size > 5000 then "Please keep your message under 5,000 characters."
+    elsif contact_rate_limited?(request.ip) then "Too many messages from your network. Please try again in an hour."
+    end
+  if error
+    session[:contact] = { "error" => error, "values" => f }
+    redirect to("#{back}#contact")
+  end
+
+  CONTACTS.insert_one(f.merge("created_at" => Time.now.utc, "ip" => request.ip, "page" => back,
+                              "signed_in_as" => current_user&.dig("email")))
+  who = f["company"].empty? ? f["name"] : "#{f['name']} (#{f['company']})"
+  postmark_send("Variablee Code · Contact request from #{who}",
+                ["New message from the contact form.", "Name: #{f['name']}", "Email: #{f['email']}",
+                 "Company: #{f['company'].empty? ? '-' : f['company']}", "Message:\n#{f['message']}",
+                 "Sent from: #{request.base_url}#{back}", "— Variablee Code"].join("\n\n"),
+                reply_to: f["email"])
+  session[:contact] = { "sent" => true }
+  redirect to("#{back}#contact")
 end
 
 # Research index: the white paper and blog posts.
@@ -718,7 +774,7 @@ __END__
   .brand:hover { text-decoration: none; opacity: .9; }
   .brand .product { font-weight: 400; opacity: .9; }
   .brand { font-size: 17px; letter-spacing: 0; }
-  .nav { display: flex; gap: 22px; margin-left: auto; font-size: 14px; font-weight: 600; }
+  .nav { display: flex; align-items: center; gap: 22px; margin-left: auto; font-size: 14px; font-weight: 600; line-height: 1.2; }
   .nav a { color: rgba(255,255,255,.88); } .nav a:hover { color: #fff; text-decoration: none; }
   @media (max-width: 760px) { .nav { order: 3; width: 100%; margin-left: 0; gap: 16px; overflow-x: auto; padding-bottom: 2px; } }
   .login-card .google-btn { display: flex; justify-content: center; width: 100%; margin-top: 0; border: 0; cursor: pointer; font: inherit; font-weight: 700; font-size: 16px; }
@@ -738,6 +794,30 @@ __END__
 .badge-title { font-size: 19px; font-weight: 800; margin: 3px 0 4px; line-height: 1.15; }
 .badge-caption { font-size: 12.5px; line-height: 1.35; opacity: .9; }
 @media (max-width: 560px) { .badges { grid-template-columns: 1fr 1fr 1fr; gap: 8px; } .badge-title { font-size: 15px; } .badge-caption { font-size: 11px; } }
+.nav .nav-cta { padding: 8px 16px; border-radius: 99px; background: #fff; color: #6d28d9; }
+.nav .nav-cta:hover { color: #4c1d95; }
+.contact-wrap { max-width: 1040px; margin: 8px auto 40px; padding: 0 16px; scroll-margin-top: 16px; }
+.contact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 32px; padding: 28px; }
+@media (max-width: 760px) { .contact { grid-template-columns: 1fr; gap: 18px; padding: 20px; } }
+.contact .kicker { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.contact h2 { margin: 6px 0 8px; font-size: 24px; }
+.contact-text p { margin: 0 0 12px; color: var(--muted); }
+.contact-text ul { margin: 0; padding-left: 18px; color: var(--muted); } .contact-text li { margin: 4px 0; }
+.contact-form { display: grid; gap: 12px; }
+.contact-form .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 560px) { .contact-form .row2 { grid-template-columns: 1fr; } }
+.contact-form label { display: grid; gap: 5px; font-size: 13px; font-weight: 600; }
+.contact-form .opt { color: var(--muted); font-weight: 500; }
+.contact-form input, .contact-form textarea { font: inherit; font-size: 15px; font-weight: 400; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--fg); width: 100%; }
+.contact-form textarea { resize: vertical; min-height: 110px; }
+.contact-form input:focus, .contact-form textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+.contact-form button { justify-self: start; padding: 11px 22px; font: inherit; font-weight: 700; border: 0; border-radius: 10px;
+  background: var(--accent); color: #fff; cursor: pointer; }
+.contact-form .fine-print { margin: 0; font-size: 12px; color: var(--muted); }
+.contact-form .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.contact-ok { padding: 18px; border-radius: 12px; background: var(--green-bg); color: var(--green); }
+.contact-err { padding: 10px 14px; border-radius: 10px; background: var(--red-bg); color: var(--red); font-size: 14px; }
   .soon-note { margin: 12px 0 0 !important; padding: 10px 12px; border-radius: 10px; background: rgba(25,23,43,.45); font-size: 14px; }
   .legal ul { padding-left: 20px; } .legal li { margin: 4px 0; } .legal .intro { font-size: 16px; }
   .posts { display: grid; gap: 14px; } .post { display: block; color: inherit; }
@@ -753,8 +833,9 @@ __END__
   .me-text { display: flex; flex-direction: column; line-height: 1.2; color: #fff; min-width: 0; }
   .me-text b { font-size: 14px; } .me-text small { font-size: 12px; opacity: .85; }
   .me form { margin: 0; }
-  .me .logout { display: inline-block; padding: 7px 14px; border: 0; border-radius: 99px; background: #fff; color: #6d28d9;
-                font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .me.plain { padding: 0; background: none; backdrop-filter: none; }
+  .me .logout { display: inline-block; padding: 8px 16px; font-size: 14px; line-height: 1.2; border: 0; border-radius: 99px; background: #fff; color: #6d28d9;
+                font-family: inherit; font-weight: 700; cursor: pointer; }
   .me .logout:hover { text-decoration: none; opacity: .9; }
   .me.off { padding-right: 14px; }
   @media (max-width: 600px) { .me-text small { display: none; } }
@@ -916,11 +997,12 @@ __END__
 </head>
 <body>
 <%= yield %>
+<% unless @active %><%= erb :contact, layout: false %><% end %>
 <footer>
   <div class="foot-links">
     <a href="<%= LINKS[:whitepaper] %>">White paper</a> · <a href="<%= LINKS[:blog] %>">Blog</a> ·
     <a href="<%= LINKS[:github] %>" target="_blank" rel="noopener">GitHub</a> · <a href="<%= LINKS[:variablee] %>" target="_blank" rel="noopener">variablee.com</a> ·
-    <a href="/privacy">Privacy</a> · <a href="/tos">Terms</a>
+    <a href="/privacy">Privacy</a> · <a href="/tos">Terms</a> · <a href="#contact">Contact</a>
   </div>
   © <%= Time.now.year %> Variablee · Frontier AI Security Lab. Variablee Code findings are a triage order for expert review, not proof.
 </footer>
@@ -1182,6 +1264,7 @@ __END__
     <a href="<%= LINKS[:github] %>" target="_blank" rel="noopener">GitHub</a>
     <a href="/privacy">Privacy</a>
     <a href="/tos">Terms</a>
+    <a class="nav-cta" href="#contact">Contact us</a>
   </nav>
   <% if current_user %>
   <div class="me">
@@ -1195,7 +1278,7 @@ __END__
     <span class="avatar">?</span><span class="me-text"><b>Not signed in</b><small>Google sign-in is off</small></span>
   </div>
   <% elsif request.path_info != "/login" %>
-  <div class="me"><a class="logout" href="/login">Sign in</a></div>
+  <div class="me plain"><a class="logout" href="/login">Sign in</a></div>
   <% end %>
 </div>
 
@@ -1419,3 +1502,39 @@ __END__
   </div>
   <% end %>
 </div>
+
+@@ contact
+<% c = session.delete(:contact) || {}; v = c["values"] || {}
+   v = { "name" => current_user&.dig("name"), "email" => current_user&.dig("email") }.compact.merge(v) %>
+<section id="contact" class="contact-wrap">
+  <div class="contact card">
+    <div class="contact-text">
+      <div class="kicker">Contact us</div>
+      <h2>Talk to our team</h2>
+      <p>Want to run Variablee Code on your organization's codebase, plan a pilot, or ask about our research?
+         Send us a note and we'll get back to you.</p>
+      <ul>
+        <li>Pilots on large enterprise codebases</li>
+        <li>Private repositories and SSO</li>
+        <li>Research collaborations</li>
+      </ul>
+    </div>
+    <form class="contact-form" method="post" action="/contact">
+      <% if c["sent"] %>
+        <div class="contact-ok" role="status"><b>Thanks, your message is on its way.</b> We'll reply to you by email.</div>
+      <% else %>
+        <% if c["error"] %><div class="contact-err" role="alert"><%= h c["error"] %></div><% end %>
+        <input type="hidden" name="back" value="<%= h request.fullpath %>">
+        <div class="hp" aria-hidden="true"><label>Website <input name="website" tabindex="-1" autocomplete="off"></label></div>
+        <div class="row2">
+          <label>Name<input name="name" required maxlength="100" autocomplete="name" value="<%= h v['name'] %>"></label>
+          <label>Work email<input name="email" type="email" required maxlength="200" autocomplete="email" value="<%= h v['email'] %>"></label>
+        </div>
+        <label><span>Company <span class="opt">(optional)</span></span><input name="company" maxlength="150" autocomplete="organization" value="<%= h v['company'] %>"></label>
+        <label>Message<textarea name="message" required minlength="10" maxlength="5000" rows="4"><%= h v['message'] %></textarea></label>
+        <button type="submit">Send message</button>
+        <p class="fine-print">We use what you send only to reply to you. See our <a href="/privacy">Privacy Policy</a>.</p>
+      <% end %>
+    </form>
+  </div>
+</section>

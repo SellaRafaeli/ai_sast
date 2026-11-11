@@ -11,6 +11,7 @@ Variablee Code is the web app for `route_tracer.rb`. Anyone can paste a public r
 | `/whitepaper`, `/whitepaper.pdf` | The white paper (`public/whitepaper.html`; rebuild the PDF with `web/build_whitepaper_pdf`) |
 | `/blog` | Research index: the white paper and blog posts (`POSTS` in `web.rb`) |
 | `/privacy`, `/tos` | Privacy Policy and Terms of Service (`LEGAL` in `web.rb`). All four pages open without signing in. |
+| `#contact` on every page, `POST /contact` | "Contact us" form (linked from the top bar). Messages are saved in the `contacts` collection and emailed to `NOTIFY_EMAIL` with Reply-To set to the sender. A hidden field catches bots, and one IP can send at most 5 messages an hour. Works without signing in. |
 
 The sign-in page also shows **Sign in with Microsoft** and **Sign in with SSO** buttons. They are not wired up yet: clicking one shows a "coming soon, use Google" note.
 
