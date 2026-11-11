@@ -201,6 +201,89 @@ def ruby_script(name, *args)
   [RbConfig.ruby, "-e", "$stdout.sync = true; $0 = ARGV.shift; load $0", File.join(TRACER_DIR, name), *args]
 end
 
+# ── getting the code ──
+# GitHub, GitLab and Bitbucket serve any public repo's default branch as a .tar.gz over HTTPS, so we download
+# and unpack that: no git needed (Heroku-24 dynos have no git at run time) and faster than a clone.
+# Other hosts (ALLOWED_GIT_HOSTS="*") fall back to a shallow `git clone` where git is installed.
+
+# "https://github.com/OWASP/railsgoat(.git)" -> the archive URL for its default branch, or nil
+def archive_url(url)
+  uri = URI.parse(url)
+  parts = uri.path.delete_prefix("/").delete_suffix("/").delete_suffix(".git").split("/")
+  return nil if parts.size < 2
+  repo = parts.last
+  case uri.host.downcase
+  when "github.com", "www.github.com"
+    parts.size == 2 ? "https://codeload.github.com/#{parts[0]}/#{repo}/tar.gz/HEAD" : nil
+  when "gitlab.com" # namespaces can be nested groups
+    "https://gitlab.com/#{parts.join('/')}/-/archive/HEAD/#{repo}-HEAD.tar.gz"
+  when "bitbucket.org"
+    parts.size == 2 ? "https://bitbucket.org/#{parts[0]}/#{repo}/get/HEAD.tar.gz" : nil
+  end
+rescue URI::InvalidURIError
+  nil
+end
+
+# Download `url` to `file`, following redirects, giving up past `max_bytes` or `timeout` seconds.
+def download(url, file, max_bytes:, timeout:)
+  deadline = Time.now + timeout
+  5.times do
+    uri = URI.parse(url)
+    Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", open_timeout: 20, read_timeout: 60) do |http|
+      http.request(Net::HTTP::Get.new(uri)) do |res|
+        case res
+        when Net::HTTPRedirection
+          url = URI.join(url, res["location"]).to_s
+        when Net::HTTPSuccess
+          bytes = 0
+          File.open(file, "wb") do |f|
+            res.read_body do |chunk|
+              bytes += chunk.bytesize
+              raise format("repo archive is over %d MB", max_bytes / 1_048_576) if bytes > max_bytes
+              raise "download took longer than #{timeout}s" if Time.now > deadline
+              f.write(chunk)
+            end
+          end
+          return bytes
+        when Net::HTTPNotFound, Net::HTTPUnauthorized, Net::HTTPForbidden
+          raise "repo not found (is it public?)"
+        else
+          raise "download failed: HTTP #{res.code}"
+        end
+      end
+    end
+  end
+  raise "too many redirects"
+end
+
+# Put the repo's default branch in `repo_dir`; returns the commit id ("" when unknown).
+def fetch_repo(id, env, url, work, repo_dir)
+  if (archive = archive_url(url))
+    file = File.join(work, "repo.tar.gz")
+    append_log(id, "$ download #{archive}\n")
+    bytes = download(archive, file, max_bytes: MAX_REPO_MB * 1_048_576, timeout: CLONE_TIMEOUT)
+    append_log(id, format("downloaded %.1f MB\n", bytes / 1_048_576.0))
+    # git-made archives (GitHub, GitLab) record the commit in their first header: "comment=<sha>"
+    head = Zlib::GzipReader.open(file) { |gz| gz.read(2048) }.to_s rescue ""
+    commit = head[/comment=([0-9a-f]{40})/, 1]
+    out = File.join(work, "unpacked")
+    FileUtils.mkdir_p(out)
+    ok, = run(id, env, ["tar", "-xzf", file, "-C", out, "--no-same-owner"], chdir: work, timeout: CLONE_TIMEOUT)
+    top = Dir.children(out)
+    raise "could not unpack the repo archive" unless ok && top.size == 1 && File.directory?(File.join(out, top[0]))
+    File.rename(File.join(out, top[0]), repo_dir)
+    FileUtils.rm_f(file)
+    commit || top[0][/[0-9a-f]{7,40}\z/].to_s # Bitbucket names the folder owner-repo-<short sha>
+  else
+    ok, = run(id, env, ["git", "-c", "core.hooksPath=/dev/null", "clone", "--depth", "1", "--single-branch",
+                        "--no-tags", "--", url, repo_dir], chdir: work, timeout: CLONE_TIMEOUT)
+    raise "git clone failed (is the repo public?)" unless ok
+    Open3.capture2("git", "-C", repo_dir, "rev-parse", "HEAD")[0].strip
+  end
+rescue Errno::ENOENT => e
+  raise e.message.include?("git") ? "git isn't installed on this server, so only GitHub, GitLab and Bitbucket repos can be scanned" : e.message
+end
+
 def dir_mb(dir)
   Dir.glob("**/*", File::FNM_DOTMATCH, base: dir).sum { |f| File.size?(File.join(dir, f)) || 0 } / 1_048_576.0
 end
@@ -226,11 +309,8 @@ def scan(id)
   # 1. CLONE
   update(id, "status" => "cloning", "started_at" => Time.now.utc)
   event(id, "Scan started", send_email: false)
-  ok, = run(id, env, ["git", "-c", "core.hooksPath=/dev/null", "clone", "--depth", "1", "--single-branch",
-                      "--no-tags", "--", doc["repo_url"], repo_dir], chdir: work, timeout: CLONE_TIMEOUT)
-  raise "git clone failed (is the repo public?)" unless ok
+  commit = fetch_repo(id, env, doc["repo_url"], work, repo_dir)
   repo_dir = File.realpath(repo_dir)
-  commit = Open3.capture2("git", "-C", repo_dir, "rev-parse", "HEAD")[0].strip
   size = dir_mb(repo_dir)
   raise format("repo is %.0f MB, over the %d MB limit", size, MAX_REPO_MB) if size > MAX_REPO_MB
   update(id, "commit" => commit, "repo_mb" => size.round(1))

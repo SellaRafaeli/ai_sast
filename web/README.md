@@ -21,7 +21,7 @@ Everything for the server is in [`web.rb`](web.rb): routes, background worker an
 
 ## Run it locally
 
-You need Ruby 4.0, a running MongoDB, `git`, and (to scan JS/TS repos) `node`. From the repo root:
+You need Ruby 4.0, a running MongoDB, `tar`, and (to scan JS/TS repos) `node`. From the repo root:
 
 ```bash
 bundle install
@@ -176,6 +176,6 @@ Emails are sent in the background; the server log shows `[email] sent: ...` or w
 
 ## Limits
 
-- Public repos over https only. Clones are shallow (`--depth 1`), and git hooks, LFS files and submodules are skipped.
+- Public repos over https only. GitHub, GitLab and Bitbucket repos are downloaded as a `.tar.gz` of the default branch (no `git` needed, which matters on Heroku-24, where `git` exists only at build time). Other hosts, allowed with `ALLOWED_GIT_HOSTS="*"`, use a shallow `git clone` and need `git` on the server. LFS files and submodules are not fetched.
 - Time limits: 3 minutes to clone, 15 minutes to trace, 15 minutes to analyze.
 - There's no login or rate limit per visitor. The queue cap and the host list are the only guards, and every analysis click costs LLM calls (about one per 10 routes). Set `ANALYZE=0` if you don't want to pay for anyone's scans.
