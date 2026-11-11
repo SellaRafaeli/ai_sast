@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" fill="#F5B800" role="img" aria-labelledby="title">
+  <title id="title">Gold trophy with laurel leaves</title>
+  <defs>
+    <g id="laurel">
+      <path d="M46 99C35 99 24 91 21 79" fill="none" stroke="#F5B800" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M23 86C15 83 15 77 17 72C23 75 26 80 23 86ZM28 92C20 93 16 89 14 84C21 83 26 86 28 92ZM34 96C27 100 22 98 18 94C24 90 30 91 34 96ZM40 98C35 104 29 103 24 100C29 95 35 95 40 98ZM27 91C25 84 28 79 32 77C35 83 33 88 27 91ZM34 96C32 89 36 85 40 83C42 89 40 94 34 96Z"/>
+    </g>
+  </defs>
+  <path fill-rule="evenodd" d="M28 31H8V47L21 60H32V52H24L16 44V39H28ZM100 31H120V47L107 60H96V52H104L112 44V39H100Z"/>
+  <path d="M64 12C54 21 42 24 28 26V53C28 70 42 84 59 92V106H43V116H85V106H69V92C86 84 100 70 100 53V26C86 24 74 21 64 12Z"/>
+  <use href="#laurel"/>
+  <use href="#laurel" transform="translate(128 0) scale(-1 1)"/>
+</svg>

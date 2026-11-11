@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-# web.rb — BOLA Detector, by Variablee: a small public web page for route_tracer.rb.
+# web.rb — Variablee Code: the web app around route_tracer.rb and analyze_bola.rb.
 #
 # Anyone can paste a git repo URL and start a scan. Each scan:
 #   1. CLONE   git clone --depth 1 into a temp folder on the dyno's disk
@@ -113,9 +113,9 @@ def email(id, subject, details)
   name, = repo_name(scan["repo_url"])
   link = "#{scan['base_url']}/scans/#{id}"
   owner = scan["requested_by"] ? "#{scan['requested_by']['name']} <#{scan['requested_by']['email']}>" : "anonymous"
-  body = { "From" => POSTMARK_FROM, "To" => NOTIFY_EMAIL, "Subject" => "BOLA Detector · #{name}: #{subject}",
+  body = { "From" => POSTMARK_FROM, "To" => NOTIFY_EMAIL, "Subject" => "Variablee Code · #{name}: #{subject}",
            "TextBody" => [subject, details, "Repo: #{scan['repo_url']}", "Scan started by: #{owner}", "Scan: #{link}",
-                          "— BOLA Detector, by Variablee"].reject(&:empty?).join("\n\n"),
+                          "— Variablee Code"].reject(&:empty?).join("\n\n"),
            "MessageStream" => "outbound" }
   Thread.new do
     res = Net::HTTP.post(URI("https://api.postmarkapp.com/email"), JSON.dump(body),
@@ -330,6 +330,17 @@ set :bind, "0.0.0.0"
 set :port, Integer(ENV.fetch("PORT", "4567"))
 set :server, "puma"
 
+# web/dev sets LIVE_RELOAD=1: pages poll /__live and reload when the server restarts with a new boot id.
+LIVE_RELOAD = ENV["LIVE_RELOAD"] == "1"
+BOOT_ID = SecureRandom.hex(6)
+if LIVE_RELOAD
+  get "/__live" do
+    cache_control :no_store
+    content_type :text
+    BOOT_ID
+  end
+end
+
 # ─────────────────────────── sign in with Google ───────────────────────────
 # With GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET set, every page needs a Google sign-in (OpenID Connect,
 # authorization-code flow, no extra gems). Without them the site is open and scans are "anonymous".
@@ -343,8 +354,8 @@ USERS                = DB[:users] # one document per person who signed in
 # Admins see every user's scans; everyone else sees only their own.
 ADMIN_EMAILS         = ENV.fetch("ADMIN_EMAILS", "sella.rafaeli@gmail.com").downcase.split(",").map(&:strip).reject(&:empty?)
 SCANS.indexes.create_one("requested_by.email" => 1, created_at: -1)
-PUBLIC_PATHS         = %w[/login /logout /auth/google /auth/google/callback /privacy /tos /terms /whitepaper].freeze
-LINKS = { whitepaper: "/whitepaper", blog: "https://sellarafaeli.com/blog/ai_native_sast_for_idor_bola",
+PUBLIC_PATHS         = %w[/login /logout /auth/google /auth/google/callback /privacy /tos /terms /whitepaper /blog /__live].freeze
+LINKS = { whitepaper: "/whitepaper", blog: "/blog", blog_post: "https://sellarafaeli.com/blog/ai_native_sast_for_idor_bola",
           github: "https://github.com/sellarafaeli/ai_sast", variablee: "https://variablee.com" }.freeze
 if AUTH_ON
   warn "[auth] Google sign-in is ON#{ALLOWED_DOMAINS.any? || ALLOWED_EMAILS.any? ? " (only #{(ALLOWED_DOMAINS + ALLOWED_EMAILS).join(', ')})" : ''}"
@@ -386,26 +397,104 @@ end
   end
 end
 
-# Placeholder legal pages (Google's consent screen asks for links to both).
+# Privacy Policy and Terms of Service. Each section is [heading, text] or [heading, [bullet, ...]].
+# Keep these in step with what the app really stores and sends (see web/README.md "What's stored").
+LEGAL_UPDATED = "November 11, 2026"
 LEGAL = {
-  "privacy" => ["Privacy Policy", [
-    ["What we collect", "When you sign in with Google we receive your name, email address and profile picture. For each scan we store the repository URL you entered, who started it, and the scan's results."],
-    ["How we use it", "To run the scans you ask for, show you their results, and know who ran each scan."],
-    ["Sharing", "Repository code is sent to an AI model provider to analyze it. We don't sell your data."],
-    ["Contact", "Contact details will be added here."]
-  ]],
-  "tos" => ["Terms of Service", [
-    ["Using BOLA Detector", "Only scan repositories you're allowed to analyze. Results are automated estimates from a static trace of the code, for manual review; they aren't proof that a bug exists or doesn't."],
-    ["No warranty", "The service is provided as is, without any warranty."],
-    ["Changes", "These terms may change; the date above shows the latest version."]
-  ]]
+  "privacy" => {
+    title: "Privacy Policy",
+    intro: "This policy explains what Variablee collects when you use Variablee Code, how we use it, and the choices you have. Variablee Code is operated by Variablee (\"we\", \"us\").",
+    sections: [
+      ["Information we collect", [
+        "Account information. When you sign in with Google we receive your name, email address and profile picture. We record when you first and last signed in and how many times.",
+        "Scan information. For each scan we store the repository URL you submit, the commit scanned, who started the scan and who ran its analysis, timestamps, a log of the scan, and its results: the routes found, their call trees, and the findings, which can include short excerpts of the scanned code.",
+        "Repository code. We clone the public repository you submit to analyze it. The clone is deleted as soon as the trace finishes. The trace of each route, including that route's code, is kept until you run the analysis (or until the scan is deleted), then deleted.",
+        "Technical information. We use a single cookie to keep you signed in. Our servers keep standard logs (such as IP addresses and request times) for security and troubleshooting."
+      ]],
+      ["How we use information", [
+        "To run the scans you request and show you their results.",
+        "To operate, secure and improve Variablee Code, including notifying our team when scans are started and completed.",
+        "To communicate with you about the service, if you contact us."
+      ]],
+      ["AI analysis",
+        "When you run an analysis, the traced code of each route is sent to a large language model provider (Anthropic or OpenAI) through its API to evaluate it. These providers process the code under their API terms. We do not send your account information to them."],
+      ["Service providers", [
+        "Google, for sign-in.",
+        "Our hosting and database providers, which store the application and its data.",
+        "Postmark, which delivers notification emails to our team.",
+        "Google Fonts, which serves the fonts our pages use."
+      ]],
+      ["Who can see your scans",
+        "Your scans and their results are visible to you and to Variablee administrators. They are not visible to other users. We do not sell your information."],
+      ["Retention",
+        "We keep your account information and scan results until you ask us to delete them. Repository clones are deleted when tracing ends, and stored traces are deleted once their analysis completes."],
+      ["Your choices and rights",
+        "You can ask us to access, correct, export or delete your information at any time. Depending on where you live, you may have additional rights under laws such as the GDPR or CCPA; we will honor them."],
+      ["Security",
+        "Data is transmitted over HTTPS, sign-in uses Google's OpenID Connect, and each user can access only their own scans. No system is perfectly secure, and we cannot guarantee absolute security."],
+      ["Changes to this policy",
+        "We may update this policy. When we do, we will change the date at the top of this page."],
+      ["Contact",
+        "Questions or requests about privacy: contact us through variablee.com."]
+    ]
+  },
+  "tos" => {
+    title: "Terms of Service",
+    intro: "These terms govern your use of Variablee Code, a service operated by Variablee. By signing in or using the service, you agree to them.",
+    sections: [
+      ["The service",
+        "Variablee Code analyzes source code to find potential security vulnerabilities. It is offered free of charge as a research preview. We may change, suspend or discontinue any part of it at any time."],
+      ["Your account",
+        "You sign in with a third-party identity provider. You are responsible for activity under your account and for keeping access to it secure."],
+      ["Acceptable use", [
+        "Only scan code that you own or are authorized to analyze.",
+        "Do not use the service, or its results, to attack, exploit or gain unauthorized access to any system.",
+        "If you find a vulnerability in code you do not own, report it responsibly to its maintainers.",
+        "Do not attempt to disrupt, overload, probe or reverse engineer the service, or to access other users' data."
+      ]],
+      ["Your code and results",
+        "You keep all rights to your code. You grant us a limited license to copy, store and process it, including through third-party AI providers, solely to provide the service to you. Scan results are provided for your use."],
+      ["Automated results",
+        "Findings are automated estimates produced from a static analysis of the code and AI review. They may be incomplete or wrong, and they are a triage aid for expert review, not proof that a vulnerability exists or does not exist."],
+      ["Intellectual property",
+        "The service, including its algorithms, software and content, belongs to Variablee and its licensors. Components we publish as open source are licensed under their own licenses."],
+      ["Disclaimer",
+        "The service is provided \"as is\" and \"as available\", without warranties of any kind, express or implied, including fitness for a particular purpose and non-infringement."],
+      ["Limitation of liability",
+        "To the fullest extent permitted by law, Variablee will not be liable for any indirect, incidental, special, consequential or punitive damages, or for any loss of data, profits or revenue, arising from your use of the service."],
+      ["Termination",
+        "You may stop using the service at any time. We may suspend or end your access if you breach these terms or to protect the service or others."],
+      ["Changes to these terms",
+        "We may update these terms. When we do, we will change the date at the top of this page; continuing to use the service means you accept the updated terms."],
+      ["Contact",
+        "Questions about these terms: contact us through variablee.com."]
+    ]
+  }
 }.freeze
 
 %w[privacy tos terms].each do |page|
   get "/#{page}" do
-    @title, @sections = LEGAL.fetch(page == "terms" ? "tos" : page)
+    @legal = LEGAL.fetch(page == "terms" ? "tos" : page)
+    @title = @legal[:title]
     erb :legal
   end
+end
+
+# Research index: the white paper and blog posts.
+POSTS = [
+  { kind: "White paper", date: "November 2026", url: "/whitepaper", external: false,
+    title: "Route-Sliced Context: Scalable LLM-Based Detection of Broken Object-Level Authorization in Large Codebases",
+    by: "Variablee research team",
+    summary: "The core algorithm behind Variablee Code: why BOLA is a route-local property, how we build a bounded context slice for every route across nine frameworks, and how it performs on 25 documented vulnerabilities (24 detected, one false positive on 28 known-safe routes)." },
+  { kind: "Blog", date: "November 9, 2026", url: "https://sellarafaeli.com/blog/ai_native_sast_for_idor_bola", external: true,
+    title: "AI-native SAST for IDOR / BOLA",
+    by: "Sella Rafaeli, Security Research Lead",
+    summary: "Why AI code review runs out of context on large codebases, how narrowing it to one route at a time solves that, and how we benchmark the scanner on applications with known, published vulnerabilities." }
+].freeze
+
+get "/blog" do
+  @title = "Blog"
+  erb :blog
 end
 
 # The white paper: a standalone academic page (public/whitepaper.html) and its PDF (public/whitepaper.pdf,
@@ -588,8 +677,8 @@ __END__
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <% if @active %><meta http-equiv="refresh" content="3"><% end %>
-<title><%= @title ? "#{h @title} · " : '' %>BOLA Detector by Variablee · Frontier AI for BOLA / IDOR</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
+<title><%= @title ? "#{h @title} · " : '' %>Variablee Code · AI vulnerability detection for large codebases</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%236d28d9'/><path d='M9 10l7 13 7-13' stroke='white' stroke-width='3.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
@@ -627,7 +716,35 @@ __END__
   .hero-inner { position: relative; z-index: 1; max-width: 1040px; margin: 0 auto; }
   .brand { display: inline-flex; align-items: center; gap: 10px; color: #fff; font-weight: 700; letter-spacing: .02em; }
   .brand:hover { text-decoration: none; opacity: .9; }
-  .brand .by { font-weight: 500; opacity: .8; margin-left: 4px; }
+  .brand .product { font-weight: 400; opacity: .9; }
+  .brand { font-size: 17px; letter-spacing: 0; }
+  .nav { display: flex; gap: 22px; margin-left: auto; font-size: 14px; font-weight: 600; }
+  .nav a { color: rgba(255,255,255,.88); } .nav a:hover { color: #fff; text-decoration: none; }
+  @media (max-width: 760px) { .nav { order: 3; width: 100%; margin-left: 0; gap: 16px; overflow-x: auto; padding-bottom: 2px; } }
+  .login-card .google-btn { display: flex; justify-content: center; width: 100%; margin-top: 0; border: 0; cursor: pointer; font: inherit; font-weight: 700; font-size: 16px; }
+  .login-card .google-btn + .google-btn { margin-top: 10px; }
+  .login-card .sso { background: #19172b; color: #fff; }
+  .muted-in { font-weight: 500; font-size: 12px; opacity: .7; }
+  .or { display: flex; align-items: center; gap: 10px; margin: 14px 0 4px; font-size: 12px; opacity: .8; text-transform: uppercase; letter-spacing: .1em; }
+  .or::before, .or::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,.35); }
+.signin-row { display: flex; flex-wrap: wrap; gap: 20px; align-items: stretch; margin-top: 28px; }
+.signin-row .login-card { margin: 0; flex: 0 1 440px; }
+.badges { flex: 1 1 420px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-content: center; }
+.badge-card { text-align: center; padding: 16px 12px 18px; border-radius: 18px; background: rgba(255,255,255,.12);
+              border: 1px solid rgba(255,255,255,.28); backdrop-filter: blur(8px); box-shadow: 0 10px 30px rgba(0,0,0,.12); }
+  .badge-card .trophy { width: 72px; height: 72px; display: block; margin: 0 auto 8px;
+                        filter: drop-shadow(0 4px 10px rgba(0,0,0,.2)); }
+.badge-kicker { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; opacity: .85; }
+.badge-title { font-size: 19px; font-weight: 800; margin: 3px 0 4px; line-height: 1.15; }
+.badge-caption { font-size: 12.5px; line-height: 1.35; opacity: .9; }
+@media (max-width: 560px) { .badges { grid-template-columns: 1fr 1fr 1fr; gap: 8px; } .badge-title { font-size: 15px; } .badge-caption { font-size: 11px; } }
+  .soon-note { margin: 12px 0 0 !important; padding: 10px 12px; border-radius: 10px; background: rgba(25,23,43,.45); font-size: 14px; }
+  .legal ul { padding-left: 20px; } .legal li { margin: 4px 0; } .legal .intro { font-size: 16px; }
+  .posts { display: grid; gap: 14px; } .post { display: block; color: inherit; }
+  .post:hover { text-decoration: none; border-color: var(--accent); }
+  .post .meta-line { font-size: 13px; color: var(--muted); } .post h2 { margin: 6px 0 8px; font-size: 21px; }
+  .post p { margin: 0 0 10px; color: var(--muted); } .post .more { font-weight: 600; color: var(--accent); }
+  .post .kind { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
   .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
   .me { display: flex; align-items: center; gap: 10px; font-size: 14px; padding: 4px 4px 4px 4px; border-radius: 99px;
         background: rgba(255,255,255,.18); backdrop-filter: blur(6px); }
@@ -801,12 +918,26 @@ __END__
 <%= yield %>
 <footer>
   <div class="foot-links">
-    <a href="<%= LINKS[:whitepaper] %>">White paper</a> · <a href="<%= LINKS[:blog] %>" target="_blank" rel="noopener">Blog</a> ·
+    <a href="<%= LINKS[:whitepaper] %>">White paper</a> · <a href="<%= LINKS[:blog] %>">Blog</a> ·
     <a href="<%= LINKS[:github] %>" target="_blank" rel="noopener">GitHub</a> · <a href="<%= LINKS[:variablee] %>" target="_blank" rel="noopener">variablee.com</a> ·
     <a href="/privacy">Privacy</a> · <a href="/tos">Terms</a>
   </div>
-  © <%= Time.now.year %> Variablee · Frontier AI Security Lab. Findings are a triage order for expert review, not proof.
+  © <%= Time.now.year %> Variablee · Frontier AI Security Lab. Variablee Code findings are a triage order for expert review, not proof.
 </footer>
+<% if LIVE_RELOAD %>
+<script>
+  // Dev only (web/dev): reload this page when the server restarts after a code change.
+  (function () {
+    var boot = null;
+    setInterval(function () {
+      fetch("/__live", { cache: "no-store" }).then(function (r) { return r.text(); }).then(function (id) {
+        if (boot && id !== boot) location.reload();
+        boot = id;
+      }).catch(function () {});
+    }, 1000);
+  })();
+</script>
+<% end %>
 </body>
 </html>
 
@@ -818,22 +949,20 @@ __END__
 
 @@ index
 <header class="hero">
-  <%= erb :confetti, layout: false %>
   <div class="hero-inner">
     <%= erb :brand, layout: false %>
-    <div class="eyebrow">🧪 Variablee · Frontier AI Security Lab</div>
-    <h1>Vulnerability detection <br>for large enterprise codebases <span class="spark">✨</span></h1>
-    <p class="lead">BOLA Detector parses each HTTP route's execution path: the auth filters, middleware and guards that run
-      before it, the handler, and every call down to data access. That path becomes the route's own <b>context slice</b>,
-      and a frontier model reviews one slice at a time, so even a huge codebase gets a focused review of every endpoint
-      for Broken Object Level Authorization (BOLA / IDOR).</p>
+    <div class="eyebrow">Variablee · Frontier AI Security Lab</div>
+    <!-- <h1>Code-aware AI for the vulnerabilities <br>in your largest codebases</h1>
+    <p class="lead">Variablee Code is a set of proprietary, code-aware algorithms that map how every route in your application
+      executes, through its auth logic and down to the data it touches, then put frontier AI on each path to find the
+      vulnerabilities in it. Built for very large enterprise codebases.</p>
+    <p>Maintained by an Israeli Frontier AI Security Lab, it is the #1 performer on industry benchmarks in Enterprise AI SAST vulnerability detection.</p> -->
     <form class="scan-form" method="post" action="/scans">
       <input name="repo_url" type="url" required placeholder="https://github.com/owner/repo.git" autofocus aria-label="Repo URL">
-      <button type="submit">Scan free 🚀</button>
+      <button type="submit">Start free scan</button>
     </form>
     <p class="fine">Free during research preview · public repos · results in minutes</p>
     <% if @error %><p class="error"><%= h @error %></p><% end %>
-    <%= erb :resource_links, layout: false %>
     <div class="chips"><% FRAMEWORKS.each do |f| %><span class="chip"><%= f %></span><% end %></div>
   </div>
 </header>
@@ -841,7 +970,7 @@ __END__
   <div class="section-head"><h2><%= admin? ? "Recent scans · all users" : "Your recent scans" %></h2><a href="/scans"><%= admin? ? "See all scans →" : "See all your scans →" %></a></div>
   <div class="card"><%= erb :scan_table, layout: false %></div>
 
-  <h2 class="about-head">How BOLA Detector works</h2>
+  <h2 class="about-head">How Variablee Code works</h2>
   <%= erb :about, layout: false %>
 </main>
 
@@ -851,7 +980,6 @@ __END__
    counts = verdict_counts(s); flagged = (findings || []).select { |f| %w[likely possible].include?(f['verdict']) }
    others = (findings || []) - flagged %>
 <header class="hero compact">
-  <%= erb :confetti, layout: false %>
   <div class="hero-inner">
     <%= erb :brand, layout: false %>
     <div class="repo-title"><a href="<%= h s['repo_url'] %>"><%= h name %></a></div>
@@ -1024,7 +1152,6 @@ __END__
 
 @@ scans
 <header class="hero compact">
-  <%= erb :confetti, layout: false %>
   <div class="hero-inner">
     <%= erb :brand, layout: false %>
     <div class="repo-title"><%= admin? ? "All scans" : "My scans" %></div>
@@ -1048,7 +1175,14 @@ __END__
 
 @@ brand
 <div class="topbar">
-  <a class="brand" href="/"><span class="logo">🎯</span><span>AI Code Vuln Detector <span class="by">by Variablee · Frontier AI Security Lab</span></span></a>
+  <a class="brand" href="/"><span class="logo"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 6l7 13 7-13" stroke="#fff" stroke-width="2.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Variablee <span class="product">Code</span></span></a>
+  <nav class="nav" aria-label="Main">
+    <a href="<%= LINKS[:whitepaper] %>">White paper</a>
+    <a href="<%= LINKS[:blog] %>">Blog</a>
+    <a href="<%= LINKS[:github] %>" target="_blank" rel="noopener">GitHub</a>
+    <a href="/privacy">Privacy</a>
+    <a href="/tos">Terms</a>
+  </nav>
   <% if current_user %>
   <div class="me">
     <% if current_user['picture'] %><img src="<%= h current_user['picture'] %>" alt="" referrerpolicy="no-referrer">
@@ -1103,22 +1237,44 @@ __END__
 
 @@ login
 <header class="hero">
-  <%= erb :confetti, layout: false %>
   <div class="hero-inner">
     <%= erb :brand, layout: false %>
-    <div class="eyebrow">🧪 Variablee · Frontier AI Security Lab</div>
-    <h1>Vulnerability detection <br>for large enterprise codebases <span class="spark">✨</span></h1>
-    <p class="lead">Our patent-pending algorithm AI security MW for code parsing slices your app into routes with execution and auth logic, each in its own digestible context slice, allowing frontier models to review each route for vulnerabilities.</p>
-    <p class=lead>TLDR: Let us show you the vulnerabilities in your code.</p>
+    <div class="eyebrow">Next-Gen Code-aware Vulnerability Detection for Very Large Codebases</div>
+    <h1>AI SAST for The Enterprise<br></h1>
+    <p class="lead">A swarm of AI agents with proprietary code-aware algorithms that map how every route in your application executes through its auth logic and down to the data it touches, and surface provable 
+      vulnerabilities.</p>
+      <p class=lead>Built for very large enterprise codebases by an Israeli Frontier AI Security Lab, Variablee Code is the #1 performer on industry benchmarks in Enterprise AI SAST vulnerability detection.</p>
+    <div class="signin-row">
     <div class="login-card">
-      <p><b>Try It On Your Repo.</b> Sign in with Google to run your first scan in minutes.</p>
+      <p><b>Try It On Your Repo.</b> Sign in to run your first scan in minutes.</p>
       <a class="google-btn" href="/auth/google">
         <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
         Sign in with Google
       </a>
+      <br/>
+      <button type="button" class="google-btn" data-soon="Microsoft">
+        <svg width="18" height="18" viewBox="0 0 23 23" aria-hidden="true"><path fill="#f25022" d="M1 1h10v10H1z"/><path fill="#7fba00" d="M12 1h10v10H12z"/><path fill="#00a4ef" d="M1 12h10v10H1z"/><path fill="#ffb900" d="M12 12h10v10H12z"/></svg>
+        Sign in with Microsoft
+      </button>
+      <div class="or"><span>or</span></div>
+      <button type="button" class="google-btn sso" data-soon="SSO">
+        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Sign in with SSO <span class="muted-in">SAML · OIDC</span>
+      </button>
+      <p class="soon-note" role="status" hidden></p>
       <% if @error %><p class="error" style="margin:16px 0 0"><%= h @error %></p><% end %>
     </div>
-    <%= erb :resource_links, layout: false %>
+    <%= erb :badges, layout: false %>
+    </div>
+    <script>
+      document.querySelectorAll("[data-soon]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var n = document.querySelector(".soon-note");
+          n.textContent = "Sign-in with " + b.dataset.soon + " is coming soon. Use Google for now, or contact us at variablee.com to set up your organization.";
+          n.hidden = false;
+        });
+      });
+    </script>
   </div>
 </header>
 <main>
@@ -1127,24 +1283,39 @@ __END__
 
 @@ legal
 <header class="hero compact">
-  <%= erb :confetti, layout: false %>
-  <div class="hero-inner"><%= erb :brand, layout: false %><div class="repo-title"><%= h @title %></div></div>
+  <div class="hero-inner"><%= erb :brand, layout: false %><div class="repo-title"><%= h @legal[:title] %></div>
+    <div class="meta"><span>Last updated <%= LEGAL_UPDATED %></span></div></div>
 </header>
 <main>
   <div class="card legal">
-    <p class="placeholder">Placeholder text: this page will be replaced with the final <%= h @title.downcase %>.</p>
-    <p class="muted">AI Code Vuln Detector by Variablee · Last updated <%= Time.now.utc.strftime("%B %-d, %Y") %></p>
-    <% @sections.each do |heading, text| %><h2><%= h heading %></h2><p><%= h text %></p><% end %>
+    <p class="intro"><%= h @legal[:intro] %></p>
+    <% @legal[:sections].each do |heading, body| %>
+      <h2><%= h heading %></h2>
+      <% if body.is_a?(Array) %><ul><% body.each do |item| %><li><%= h item %></li><% end %></ul>
+      <% else %><p><%= h body %></p><% end %>
+    <% end %>
   </div>
 </main>
 
-@@ resource_links
-<div class="res-links">
-  <a href="<%= LINKS[:whitepaper] %>">📄 Read the white paper</a>
-  <a href="<%= LINKS[:blog] %>" target="_blank" rel="noopener">✍️ Read the blog post</a>
-  <a href="<%= LINKS[:github] %>" target="_blank" rel="noopener">⭐ GitHub</a>
-  <a href="<%= LINKS[:variablee] %>" target="_blank" rel="noopener">🌐 variablee.com</a>
-</div>
+@@ blog
+<header class="hero compact">
+  <div class="hero-inner"><%= erb :brand, layout: false %><div class="repo-title">Research &amp; Blog</div>
+    <div class="meta"><span>Research from Variablee, the frontier AI security lab behind Variablee Code</span></div></div>
+</header>
+<main>
+  <div class="posts">
+    <% POSTS.each do |p| %>
+    <a class="card post" href="<%= h p[:url] %>"<%= ' target="_blank" rel="noopener"' if p[:external] %>>
+      <span class="kind"><%= h p[:kind] %></span>
+      <h2><%= h p[:title] %></h2>
+      <div class="meta-line"><%= h p[:by] %> · <%= h p[:date] %></div>
+      <p style="margin-top:10px"><%= h p[:summary] %></p>
+      <span class="more"><%= p[:kind] == "White paper" ? "Read the white paper →" : "Read the post →" %></span>
+    </a>
+    <% end %>
+  </div>
+</main>
+
 
 @@ about
   <div class="proof">
@@ -1222,12 +1393,29 @@ __END__
        alt="Illustrative scan output: three candidate BOLA findings, each with shared auth, the missing or unclear check, a nearby check, and a next step"></a>
   </div>
 
-  <a class="card author" href="<%= LINKS[:blog] %>" target="_blank" rel="noopener">
+  <a class="card author" href="<%= LINKS[:blog_post] %>" target="_blank" rel="noopener">
     <img src="/img/blog/tux1.jpeg" width="800" height="800" loading="lazy" alt="Sella Rafaeli">
     <div>
       <div class="kicker">From the lab</div>
       <b>AI-native SAST for IDOR / BOLA</b>
-      <span>How we built BOLA Detector, by Sella Rafaeli · Read the blog post →</span>
+      <span>The research behind Variablee Code, by Sella Rafaeli · Read the post →</span>
     </div>
   </a>
 </section>
+
+@@ badges
+<% badges = [
+     ["Benchmark", "96% recall", "96% of documented BOLAs caught in industry benchmark apps"]     ,
+     ["Speed", "Seconds to map", "42 RailsGoat routes traced in 3 seconds; AI review in about 2 minutes"],
+     ["Polyglot", "Python, Ruby, NodeJS", "Expected in 2027: PHP, Java"],
+   ] %>
+<div class="badges">
+  <% badges.each_with_index do |(kicker, title, caption), i| %>
+  <div class="badge-card">
+    <img class="trophy" src="/img/cyber-trophy.svg" width="128" height="128" alt="">
+    <div class="badge-kicker"><%= kicker %></div>
+    <div class="badge-title"><%= title %></div>
+    <div class="badge-caption"><%= caption %></div>
+  </div>
+  <% end %>
+</div>

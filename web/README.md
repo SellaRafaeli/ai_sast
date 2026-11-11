@@ -1,6 +1,6 @@
-# BOLA Detector, by Variablee (web page)
+# Variablee Code (web app)
 
-BOLA Detector is the web page for `route_tracer.rb`. Anyone can paste a public repo URL and start a scan. The server clones the repo, traces its routes and shows them. A second button, **Run the analysis**, then asks an LLM which routes look like BOLA / IDOR. Results are saved in Mongo, the page refreshes itself while a step runs, and every action is emailed through Postmark.
+Variablee Code is the web app for `route_tracer.rb`. Anyone can paste a public repo URL and start a scan. The server clones the repo, traces its routes and shows them. A second button, **Run the analysis**, then asks an LLM which routes look like BOLA / IDOR. Results are saved in Mongo, the page refreshes itself while a step runs, and every action is emailed through Postmark.
 
 | Page | What it shows |
 |---|---|
@@ -8,7 +8,11 @@ BOLA Detector is the web page for `route_tracer.rb`. Anyone can paste a public r
 | `/scans` | Your scans with status, route count and results, 50 per page (admins: everyone's, with who ran each) |
 | `/scans/<id>` | One scan: progress, the **Run the analysis** button, flagged routes with fixes, all traced routes, call trees, a timeline of what happened, and the log |
 | `/scans/<id>.json` | One scan's full document |
-| `/privacy`, `/tos`, `/whitepaper` | Placeholder pages, open without signing in |
+| `/whitepaper`, `/whitepaper.pdf` | The white paper (`public/whitepaper.html`; rebuild the PDF with `web/build_whitepaper_pdf`) |
+| `/blog` | Research index: the white paper and blog posts (`POSTS` in `web.rb`) |
+| `/privacy`, `/tos` | Privacy Policy and Terms of Service (`LEGAL` in `web.rb`). All four pages open without signing in. |
+
+The sign-in page also shows **Sign in with Microsoft** and **Sign in with SSO** buttons. They are not wired up yet: clicking one shows a "coming soon, use Google" note.
 
 Signed-in users see and open only their own scans; someone else's scan is a 404. Admins (`ADMIN_EMAILS`) see everyone's. With sign-in off, everyone sees every scan.
 
@@ -30,7 +34,7 @@ npm install
 web/dev
 ```
 
-Open http://localhost:4567. `web/dev` restarts the server by itself whenever `web/web.rb`, `llm.rb` or `.env` changes, so edits show up on the next page load. Changes to `route_tracer.rb` and `analyze_bola.rb` need no restart: each scan runs them fresh. A restart stops a trace in progress (start that scan again); an interrupted analysis goes back to "Ready to analyze". To run without auto-restart, use `bundle exec ruby web/web.rb`. By default it uses `mongodb://127.0.0.1:27017/route_tracer`. To use another database:
+Open http://localhost:4567. `web/dev` restarts the server by itself whenever `web/web.rb`, `llm.rb` or `.env` changes, and open pages reload themselves about a second later (it sets `LIVE_RELOAD=1`, which only `web/dev` uses). Changes to `route_tracer.rb` and `analyze_bola.rb` need no restart: each scan runs them fresh. A restart stops a trace in progress (start that scan again); an interrupted analysis goes back to "Ready to analyze". To run without auto-restart, use `bundle exec ruby web/web.rb`. By default it uses `mongodb://127.0.0.1:27017/route_tracer`. To use another database:
 
 ```bash
 MONGODB_URI=mongodb://127.0.0.1:27017/my_db bundle exec ruby web/web.rb

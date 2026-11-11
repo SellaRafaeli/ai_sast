@@ -1,6 +1,6 @@
 {
-  "name": "bola-detector",
-  "description": "BOLA Detector, by Variablee: paste a public repo URL, see its routes traced and scored for BOLA / IDOR.",
+  "name": "variablee-code",
+  "description": "Variablee Code: proprietary code-aware algorithms that use AI to find vulnerabilities in very large codebases.",
   "buildpacks": [
     { "url": "heroku/nodejs" },
     { "url": "heroku/python" },
