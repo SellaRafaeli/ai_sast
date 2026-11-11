@@ -962,6 +962,9 @@ __END__
 .author:hover { text-decoration: none; border-color: var(--accent); }
 .author img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; flex: none; }
 .author b { display: block; font-size: 18px; margin: 2px 0; } .author span { color: var(--muted); font-size: 14px; }
+  .sample-result { margin-top: 40px; } .sample-result h2 { margin: 0; }
+  .sample-result .section-head { flex-wrap: wrap; } .sample-tag { font-size: 13px; }
+  .sample-intro { margin: 6px 0 14px; }
   .slice { margin-top: 12px; } .slice h3 { margin: 0 0 4px; }
   .slice-lines { margin: 10px 0; padding: 12px 14px; border-radius: 10px; background: var(--surface-2); }
   .slice-lines .ln { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 3px 0; }
@@ -1518,6 +1521,29 @@ __END__
       <div class="ln l2"><code>Order.find(params[:id])</code><span class="tag red">data access, not scoped to current_user</span></div>
     </div>
     <p class="muted" style="margin-bottom:0">Because each slice is small and self-contained, the codebase's size doesn't limit the review: every route gets the model's full attention.</p>
+  </div>
+
+  <div class="sample-result">
+    <div class="section-head"><h2>What a finding looks like</h2><span class="muted sample-tag">Example from the OWASP crAPI benchmark</span></div>
+    <p class="muted sample-intro">Every flagged route comes with a score, the object at risk, the exact data-access call, the checks
+      that did run, file-and-line evidence, and a concrete fix.</p>
+    <div class="card finding likely">
+      <div class="ring" style="background:conic-gradient(var(--red) 342.0deg, var(--surface-2) 0)">
+        <span style="color:var(--red)">95</span>
+      </div>
+      <div>
+        <div class="route mono">GET /workshop/api/mechanic/mechanic_report<span class="verdict likely">likely</span></div>
+        <div class="handler">GetReportView#get · django</div>
+        <p class="why">Fetches a ServiceRequest by an ID supplied in the query without verifying that it belongs to the requester, enabling access to others’ reports.</p>
+        <dl class="kv">
+          <dt>Object</dt><dd>query.report_id -&gt; ServiceRequest</dd>
+          <dt>Data access</dt><dd class="mono">ServiceRequest.objects.filter(id=report_id).first()</dd>
+          <dt>Auth checks</dt><dd>jwt_auth_required (authentication only), no ownership check</dd>
+          <dt>Evidence</dt><dd class="mono">views.py:214-244; jwt.py:32-90</dd>
+        </dl>
+        <div class="fix"><b>Fix:</b> Authorize access by checking the ServiceRequest belongs to the authenticated mechanic/user before returning it.</div>
+      </div>
+    </div>
   </div>
 
 <section class="showcase">
