@@ -148,7 +148,7 @@ Changes can take a few minutes to apply. A `redirect_uri_mismatch` error from Go
 | `ANTHROPIC_API_KEY` / `OPEN_AI_API_KEY` | LLM key for the analysis (see the main README). Without one, scans show the trace only. | |
 | `POSTMARK_API_TOKEN` | Postmark server token. Without it, no emails are sent. | |
 | `NOTIFY_EMAIL` | Who gets the emails | `sella.rafaeli@gmail.com` |
-| `POSTMARK_FROM` | Sender address. It must be a confirmed sender signature or domain in your Postmark account. | `NOTIFY_EMAIL` |
+| `POSTMARK_FROM` | Sender address. It must be a confirmed sender signature or domain in your Postmark account. | `sella@indydevs.com` |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth client. With both set, every page needs a Google sign-in. | off |
 | `SESSION_SECRET` | Signs the sign-in cookie. Without it, everyone is signed out on each restart. | random |
 | `ALLOWED_DOMAINS` | Only Google accounts with these email domains may sign in, comma-separated | any |

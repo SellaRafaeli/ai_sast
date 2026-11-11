@@ -16,7 +16,7 @@
 #   3. TRACE   BFS from each handler: look up each call name in the index,
 #              resolve it with simple heuristics (+ LLM with --llm-resolve), recurse.
 #   4. TRIM    keep only routes that take input (path params, a body, query args,
-#              or code on the path that reads request params)  -> Mongo `traces`
+#              or the handler's own code reading request params; not shared auth filters)  -> Mongo `traces`
 #   5. OUTPUT  trace.json (full) + trace.txt (indented, human-readable)
 #
 # Node/TS: needs `node` and the `typescript` package (npm i -g typescript).
@@ -948,8 +948,11 @@ class Tracer
     @model_calls = Set.new
     @externals = Set.new
     @unresolved = []
+    @own = Set.new # methods in the handler's own call tree (not only reached from filters/middleware)
     roots = filter_defs.map { |f| node(f, "before_filter", 1, []) }
+    @in_handler = true
     roots << (handler ? node(handler, "handler", 1, []) : { "label" => "(handler not found)", "via" => "handler" })
+    @in_handler = false
     result = { "route" => "#{route['verb']} #{route['path']}", "framework" => route["framework"],
                "handler" => handler && label(handler), "input" => input_kinds(route, handler),
                "files" => @files.to_a.sort, "methods" => @seen.to_a, "model_calls" => @model_calls.to_a,
@@ -964,14 +967,17 @@ class Tracer
     result
   end
 
-  # Why this route can carry attacker-controlled input (empty = no input -> trimmed).
+  # Which dynamic parameters this route accepts (empty = none -> trimmed): a path parameter, a request body,
+  # handler arguments outside the path (query parameters in Flask/FastAPI), or request input read by the
+  # handler's own code. Input read only by shared filters/middleware (e.g. an auth check reading a token)
+  # doesn't count: it isn't a parameter of this route.
   def input_kinds(route, handler)
     names = route["path"].scan(/:(\w+)|\{(\w+)\}|<(?:\w+:)?(\w+)>/).flatten.compact
     kinds = []
     kinds << "path" if names.any?
     kinds << "body" if %w[POST PUT PATCH].include?(route["verb"])
     kinds << "query" if ((handler&.dig("params") || []) - names).any? # Flask/FastAPI handler args not in the path
-    kinds << "request_read" if @seen.any? { |id| (d = @store.def_by_id(id)) && source_of(d)["code"].match?(INPUT_CODE) }
+    kinds << "request_read" if @own.any? { |id| (d = @store.def_by_id(id)) && source_of(d)["code"].match?(INPUT_CODE) }
     kinds
   end
 
@@ -1001,6 +1007,7 @@ class Tracer
       @model_calls << n["label"]
       return n.merge("leaf" => true)
     end
+    @own << d["id"] if @in_handler
     return n.merge("cycle" => true) if path.include?(d["id"])
     return n.merge("seen" => true) if @seen.include?(d["id"]) # already expanded in this route
     @seen << d["id"]

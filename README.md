@@ -264,7 +264,8 @@ route_tracer.rb
   3. TRACE   from each handler (after its filters): look each call up by name in the index,
              pick the target with simple rules, recurse
   4. TRIM    drop routes with no input: no path params, not POST/PUT/PATCH,
-             no extra handler args, and no code reading request params
+             no extra handler args, and no request params read by the handler's own
+             code (input read only by shared filters, like an auth check, doesn't count)
   5. OUTPUT  trace.json / trace.txt / Mongo
 
 analyze_bola.rb

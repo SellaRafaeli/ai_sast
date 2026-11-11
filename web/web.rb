@@ -20,7 +20,7 @@
 #   ANALYZE=0          trace only, no LLM calls
 #   POSTMARK_API_TOKEN Postmark server token; without it no emails are sent
 #   NOTIFY_EMAIL       who gets the emails (default sella.rafaeli@gmail.com)
-#   POSTMARK_FROM      sender address, a verified Postmark sender signature (default NOTIFY_EMAIL)
+#   POSTMARK_FROM      sender address, a verified Postmark sender signature (default sella@indydevs.com)
 #   GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET   with both set, every page needs a Google sign-in
 #   SESSION_SECRET     signs the sign-in cookie; ALLOWED_DOMAINS / ALLOWED_EMAILS limit who may sign in
 #   ADMIN_EMAILS       see every user's scans (default sella.rafaeli@gmail.com); everyone else sees only their own
@@ -59,7 +59,7 @@ MAX_TREE_CHARS = 3_000_000 # keeps a scan document under Mongo's 16 MB limit
 ALLOWED_HOSTS = ENV.fetch("ALLOWED_GIT_HOSTS", "github.com,gitlab.com,bitbucket.org").split(",").map(&:strip)
 ACTIVE        = %w[queued cloning tracing analysis_queued analyzing].freeze # a step is waiting or running
 NOTIFY_EMAIL  = ENV.fetch("NOTIFY_EMAIL", "sella.rafaeli@gmail.com")
-POSTMARK_FROM = ENV.fetch("POSTMARK_FROM", NOTIFY_EMAIL)
+POSTMARK_FROM = ENV.fetch("POSTMARK_FROM", "sella@indydevs.com")
 MAX_TRACE_BYTES = 15_000_000 # compressed trace kept for the analysis must fit in one Mongo document
 FRAMEWORKS    = %w[Rails Sinatra Flask FastAPI Django Express Koa Fastify NestJS].freeze
 FINDING_KEYS  = %w[rank score verdict route handler framework object data_access auth_checks evidence reason fix].freeze
@@ -325,11 +325,21 @@ def scan(id)
   tree = File.read(trace_json.sub(/\.json\z/, ".txt")) rescue ""
   tree = tree[0, MAX_TREE_CHARS] + "\n... (cut: too long to store)\n" if tree.size > MAX_TREE_CHARS
 
+  # Languages the tracer had to skip because this server lacks their parser (no python3, no node/typescript):
+  # say so, rather than showing a quiet "0 routes".
+  trace_log = SCANS.find(_id: id).projection(log: 1).first["log"].to_s
+  skipped = trace_log.scan(/^\[index\] (python3 not found -> skipping \d+ \.py files|node not found -> skipping \d+ JS\/TS files|JS indexer failed -> skipping JS\/TS files)/).flatten
+  warnings = skipped.map do |line|
+    lang, tool = line.start_with?("python3") ? ["Python", "python3"] : ["JavaScript / TypeScript", "node and the typescript package"]
+    "#{lang} files were skipped: this server is missing #{tool}, so routes in those files aren't included."
+  end
+
   frameworks = traces.map { |t| t["framework"] }.tally
   update(id, "routes" => traces.map { |t| route_summary(t) }, "route_count" => traces.size, "tree" => tree,
-             "frameworks" => frameworks, "clone_path" => repo_dir, "finished_at" => Time.now.utc)
+             "frameworks" => frameworks, "clone_path" => repo_dir, "finished_at" => Time.now.utc, "warnings" => warnings)
   fw = frameworks.map { |k, v| "#{v} #{k}" }.join(", ")
-  summary = "Traced #{traces.size} routes#{fw.empty? ? '' : " (#{fw})"} at commit #{commit[0, 10]}."
+  summary = "Traced #{traces.size} routes#{fw.empty? ? '' : " (#{fw})"} at commit #{commit[0, 10]}." +
+            warnings.map { |w| "\nWarning: #{w}" }.join
 
   # Keep the trace (with each route's code) for the analysis step, which waits for a click.
   reason = analysis_off_reason
@@ -1120,7 +1130,7 @@ __END__
       vulnerabilities in it. Built for very large enterprise codebases.</p>
     <p>Maintained by an Israeli Frontier AI Security Lab, it is the #1 performer on industry benchmarks in Enterprise AI SAST vulnerability detection.</p> -->
     <form class="scan-form" method="post" action="/scans">
-      <input name="repo_url" type="url" required placeholder="https://github.com/owner/repo.git" autofocus aria-label="Repo URL">
+      <input name="repo_url" type="url" required placeholder="https://github.com/owner/repo" autofocus aria-label="Repo URL">
       <button type="submit">Start free scan</button>
     </form>
     <p class="fine">Free during research preview · public repos · results in minutes</p>
@@ -1205,6 +1215,7 @@ __END__
       <button type="submit">Run the analysis ✨</button>
     </form>
   <% end %>
+  <% (s['warnings'] || []).each do |w| %><div class="notice bad"><b>Incomplete trace:</b> <%= h w %></div><% end %>
   <% if present?(s['analysis_note']) %><div class="notice"><%= h s['analysis_note'] %></div><% end %>
   <% if s['status'] == 'done' && routes.empty? %>
     <div class="notice">No routes that take input were found. The tracer may not support this framework yet.</div>

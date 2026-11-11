@@ -407,7 +407,9 @@ user-supplied id without any ownership or authorization checks, enabling access 
     <h3>4.6&nbsp;&nbsp;Input-based pruning</h3>
     <p>By Definition&nbsp;1(i), a route that carries no caller-chosen identifier cannot have a BOLA. A route is kept if it has path
       parameters, accepts a body (POST, PUT, PATCH), takes handler arguments outside the path (query parameters in Flask and FastAPI),
-      or reaches any code that reads request parameters. Routes with none of these are dropped before the semantic phase.</p>
+      or its handler's own call tree reads request parameters. Input read only by shared filters, such as an authentication
+      check reading a session token, does not count: it is not a parameter of the route. Routes with none of these are
+      dropped before the semantic phase.</p>
 
     <h3>4.7&nbsp;&nbsp;Slice serialization and the LLM judge</h3>
     <p>Each slice is serialized as a header (route, handler, input kinds, external middleware, data-access calls) followed by the
