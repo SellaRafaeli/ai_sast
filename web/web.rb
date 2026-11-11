@@ -88,10 +88,9 @@ JOBS      = Queue.new        # [:trace, id] or [:analyze, id]
 
 # "https://github.com/OWASP/railsgoat" -> ["OWASP/railsgoat", "github.com"]
 def repo_name(url)
-  uri = URI.parse(url.to_s)
-  [uri.path.delete_prefix("/").delete_suffix(".git"), uri.host]
-rescue URI::InvalidURIError
-  [url.to_s, ""]
+  r = parse_repo_url(url)
+  return [url.to_s, ""] if r[:path].empty?
+  ["#{r[:path].join('/')}#{r[:ref] ? " @ #{r[:ref]}" : ''}", r[:host]]
 end
 
 # ─────────────────────────── events and emails ───────────────────────────
@@ -207,21 +206,48 @@ end
 # Other hosts (ALLOWED_GIT_HOSTS="*") fall back to a shallow `git clone` where git is installed.
 
 # "https://github.com/OWASP/railsgoat(.git)" -> the archive URL for its default branch, or nil
+# "https://github.com/aegra/aegra/tree/v0.9.6" -> { host:, path: ["aegra", "aegra"], ref: "v0.9.6" }.
+# A version is given the way each host links to it: GitHub /tree/<ref> (or /releases/tag/<ref>, /commit/<sha>),
+# GitLab /-/tree/<ref>, Bitbucket /src/<ref>. No version means the default branch (ref nil).
+def parse_repo_url(url)
+  uri = URI.parse(url.to_s)
+  parts = uri.path.delete_prefix("/").delete_suffix("/").split("/")
+  host = uri.host.to_s.downcase
+  ref = nil
+  case host
+  when "github.com", "www.github.com"
+    if parts.size >= 4 && %w[tree commit].include?(parts[2]) then ref = parts[3..].join("/"); parts = parts[0, 2]
+    elsif parts.size >= 5 && parts[2] == "releases" && parts[3] == "tag" then ref = parts[4..].join("/"); parts = parts[0, 2]
+    end
+  when "gitlab.com"
+    if (i = parts.index("-")) && %w[tree commit].include?(parts[i + 1]) && parts[i + 2]
+      ref = parts[(i + 2)..].join("/"); parts = parts[0, i]
+    end
+  when "bitbucket.org"
+    if parts.size >= 4 && %w[src commits].include?(parts[2]) then ref = parts[3..].join("/"); parts = parts[0, 2] end
+  end
+  parts[-1] = parts[-1].delete_suffix(".git") if parts.any?
+  { host: host, path: parts, ref: ref }
+rescue URI::InvalidURIError
+  { host: "", path: [], ref: nil }
+end
+
+# The .tar.gz URL for a repo URL (at its version, or the default branch), or nil for hosts we can't download from.
 def archive_url(url)
-  uri = URI.parse(url)
-  parts = uri.path.delete_prefix("/").delete_suffix("/").delete_suffix(".git").split("/")
+  r = parse_repo_url(url)
+  parts, ref = r[:path], r[:ref]
   return nil if parts.size < 2
   repo = parts.last
-  case uri.host.downcase
+  esc = ->(s) { s.split("/").map { |p| URI.encode_www_form_component(p) }.join("/") }
+  case r[:host]
   when "github.com", "www.github.com"
-    parts.size == 2 ? "https://codeload.github.com/#{parts[0]}/#{repo}/tar.gz/HEAD" : nil
+    parts.size == 2 ? "https://codeload.github.com/#{parts[0]}/#{repo}/tar.gz/#{esc.(ref || 'HEAD')}" : nil
   when "gitlab.com" # namespaces can be nested groups
-    "https://gitlab.com/#{parts.join('/')}/-/archive/HEAD/#{repo}-HEAD.tar.gz"
+    v = ref || "HEAD"
+    "https://gitlab.com/#{parts.join('/')}/-/archive/#{esc.(v)}/#{repo}-#{v.tr('/', '-')}.tar.gz"
   when "bitbucket.org"
-    parts.size == 2 ? "https://bitbucket.org/#{parts[0]}/#{repo}/get/HEAD.tar.gz" : nil
+    parts.size == 2 ? "https://bitbucket.org/#{parts[0]}/#{repo}/get/#{esc.(ref || 'HEAD')}.tar.gz" : nil
   end
-rescue URI::InvalidURIError
-  nil
 end
 
 # Download `url` to `file`, following redirects, giving up past `max_bytes` or `timeout` seconds.
@@ -902,7 +928,9 @@ __END__
   .brand { font-size: 17px; letter-spacing: 0; }
   .nav { display: flex; align-items: center; gap: 22px; margin-left: auto; font-size: 14px; font-weight: 600; line-height: 1.2; }
   .nav a { color: rgba(255,255,255,.88); } .nav a:hover { color: #fff; text-decoration: none; }
-  @media (max-width: 760px) { .nav { order: 3; width: 100%; margin-left: 0; gap: 16px; overflow-x: auto; padding-bottom: 2px; } }
+  .nav a { white-space: nowrap; }
+  /* phones: links on their own full-width row under the logo, wrapping to a second row instead of squeezing */
+  @media (max-width: 760px) { .nav { order: 3; width: 100%; margin-left: 0; flex-wrap: wrap; gap: 10px 18px; } }
   .login-card .google-btn { display: flex; justify-content: center; width: 100%; margin-top: 0; border: 0; cursor: pointer; font: inherit; font-weight: 700; font-size: 16px; }
   .login-card .google-btn + .google-btn { margin-top: 10px; }
   .login-card .sso { background: #19172b; color: #fff; }
@@ -1187,7 +1215,7 @@ __END__
       <input name="repo_url" type="url" required placeholder="https://github.com/owner/repo" autofocus aria-label="Repo URL">
       <button type="submit">Start free scan</button>
     </form>
-    <p class="fine">Free during research preview · public repos · results in minutes</p>
+    <p class="fine">Free during research preview · public repos · results in minutes · scan a specific version with a link like github.com/owner/repo/tree/v1.2.3</p>
     <% if @error %><p class="error"><%= h @error %></p><% end %>
     <div class="chips"><% FRAMEWORKS.each do |f| %><span class="chip"><%= f %></span><% end %></div>
   </div>
