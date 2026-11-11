@@ -1106,6 +1106,7 @@ __END__
 .contact-form input, .contact-form textarea { font: inherit; font-size: 15px; font-weight: 400; padding: 10px 12px; border-radius: 10px;
   border: 1px solid var(--line); background: var(--surface-2); color: var(--fg); width: 100%; }
 .contact-form textarea { resize: vertical; min-height: 110px; }
+.contact-form ::placeholder { color: var(--muted); opacity: .7; }
 .contact-form input:focus, .contact-form textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
 .contact-form button { justify-self: start; padding: 11px 22px; font: inherit; font-weight: 700; border: 0; border-radius: 10px;
   background: var(--accent); color: #fff; cursor: pointer; }
@@ -1307,6 +1308,29 @@ __END__
   .pager { display: flex; gap: 12px; justify-content: center; margin-top: 16px; }
   footer { text-align: center; color: var(--muted); font-size: 13px; padding: 0 16px 40px; }
   #boom { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
+
+  /* ── phones: kept last so these win over the desktop rules above ── */
+  .google-btn { white-space: nowrap; }
+  .slice-lines { overflow-x: auto; }
+  @media (max-width: 560px) {
+    .login-card { padding: 20px; }
+    .login-card .sso .muted-in { display: none; }
+    /* trophies: one per row, trophy on the left */
+    .badges { grid-template-columns: 1fr; gap: 10px; }
+    .badge-card { display: grid; grid-template-columns: 56px 1fr; column-gap: 14px; align-items: center; text-align: left; padding: 12px 16px; }
+    .badge-card .trophy { grid-row: 1 / span 3; width: 56px; height: 56px; margin: 0; }
+    .badge-title { font-size: 17px; margin: 1px 0 2px; } .badge-caption { font-size: 12.5px; }
+    /* stats: 2 x 2 instead of four full-width cards */
+    .proof { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .stat { padding: 14px; } .stat b { font-size: 26px; } .stat span { font-size: 12.5px; }
+    /* slice: code lines scroll sideways instead of breaking mid-word */
+    .slice-lines .ln code { word-break: normal; white-space: nowrap; }
+    .slice-lines .ln { flex-wrap: nowrap; } .slice-lines .ln .tag { white-space: nowrap; }
+    /* finding example: score ring above the text, labels above values */
+    .finding { grid-template-columns: 1fr; gap: 10px; }
+    .finding .route { word-break: normal; overflow-wrap: anywhere; }
+    .kv { grid-template-columns: 1fr; gap: 2px; } .kv dd { margin-bottom: 8px; overflow-wrap: anywhere; }
+  }
 </style>
 </head>
 <body>
@@ -1730,8 +1754,8 @@ __END__
 
 @@ about
   <div class="proof">
-    <div class="stat red"><b>96%</b><span>of known BOLAs caught (24 of 25) on our benchmark</span></div>
-    <div class="stat green"><b>1 / 28</b><span>false positives on routes known to be safe</span></div>
+    <div class="stat red"><b>96% recall</b><span>of known BOLAs caught</span></div>
+    <div class="stat green"><b>97% precision rate</b><span>1/28 false positives rate on industry benchmarks</span></div>
     <div class="stat"><b>4</b><span>real-world apps with published BOLAs, from CVEs to OWASP targets</span></div>
     <div class="stat"><b>9</b><span>frameworks across Ruby, Python and JavaScript / TypeScript</span></div>
   </div>
@@ -1766,12 +1790,12 @@ __END__
         <span style="color:var(--red)">95</span>
       </div>
       <div>
-        <div class="route mono">GET /workshop/api/mechanic/mechanic_report<span class="verdict likely">likely</span></div>
+        <div class="route mono">GET /workshop/api/mechanic/<wbr>mechanic_report<span class="verdict likely">likely</span></div>
         <div class="handler">GetReportView#get · django</div>
         <p class="why">Fetches a ServiceRequest by an ID supplied in the query without verifying that it belongs to the requester, enabling access to others’ reports.</p>
         <dl class="kv">
           <dt>Object</dt><dd>query.report_id -&gt; ServiceRequest</dd>
-          <dt>Data access</dt><dd class="mono">ServiceRequest.objects.filter(id=report_id).first()</dd>
+          <dt>Data access</dt><dd class="mono">ServiceRequest.objects<wbr>.filter(id=report_id)<wbr>.first()</dd>
           <dt>Auth checks</dt><dd>jwt_auth_required (authentication only), no ownership check</dd>
           <dt>Evidence</dt><dd class="mono">views.py:214-244; jwt.py:32-90</dd>
         </dl>
@@ -1985,6 +2009,7 @@ __END__
     .fn-scrim { padding: 16px; } .fn-compare { grid-template-columns: 1fr; }
     .fn-scrim .fn-head { padding: 18px 18px 0; } .fn-scrim .fn-toggle { width: calc(100% - 36px); margin: 14px 18px 0; }
     .fn-scrim .fn-details { margin: 0 18px; padding: 0 14px; } .fn-scrim .fn-foot { padding: 12px 18px 14px; }
+    .fn-card pre.fn-code, .fn-card pre.fn-term, .fn-pane .fn-mono { font-size: 11px; }
   }
   @keyframes fn-fade { from { opacity: 0; } }
   @keyframes fn-rise { from { opacity: 0; transform: translateY(12px) scale(.99); } }
@@ -2173,11 +2198,11 @@ __END__
         <input type="hidden" name="back" value="<%= h request.fullpath %>">
         <div class="hp" aria-hidden="true"><label>Website <input name="website" tabindex="-1" autocomplete="off"></label></div>
         <div class="row2">
-          <label>Name<input name="name" required maxlength="100" autocomplete="name" value="<%= h v['name'] %>"></label>
-          <label>Work email<input name="email" type="email" required maxlength="200" autocomplete="email" value="<%= h v['email'] %>"></label>
+          <label>Name<input name="name" required maxlength="100" autocomplete="name" placeholder="Jane Smith" value="<%= h v['name'] %>"></label>
+          <label>Work email<input name="email" type="email" required maxlength="200" autocomplete="email" placeholder="jane@company.com" value="<%= h v['email'] %>"></label>
         </div>
-        <label><span>Company <span class="opt">(optional)</span></span><input name="company" maxlength="150" autocomplete="organization" value="<%= h v['company'] %>"></label>
-        <label>Message<textarea name="message" required minlength="10" maxlength="5000" rows="4"><%= h v['message'] %></textarea></label>
+        <label><span>Company <span class="opt">(optional)</span></span><input name="company" maxlength="150" autocomplete="organization" placeholder="Acme Inc." value="<%= h v['company'] %>"></label>
+        <label>Message<textarea name="message" required minlength="10" maxlength="5000" rows="4" placeholder="Tell us about your codebase, team size, and what you'd like to explore."><%= h v['message'] %></textarea></label>
         <button type="submit">Send message</button>
         <p class="fine-print">We use what you send only to reply to you. See our <a href="/privacy">Privacy Policy</a>.</p>
       <% end %>
