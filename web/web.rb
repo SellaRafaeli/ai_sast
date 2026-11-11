@@ -1153,8 +1153,9 @@ __END__
   .legal .placeholder { padding: 10px 14px; border-radius: 10px; background: var(--amber-bg); color: var(--amber); font-weight: 600; }
   footer a { color: var(--muted); text-decoration: underline; }
   .foot-links { margin-bottom: 6px; font-weight: 500; }
-  .eyebrow { display: inline-block; margin-top: 28px; padding: 5px 12px; border-radius: 99px; font-size: 12px; font-weight: 700;
-             letter-spacing: .08em; text-transform: uppercase; background: rgba(255,255,255,.18); text-align: center; }
+  .eyebrow { display: inline-block; margin-top: 28px; padding: 5px 12px; font-size: 12px; font-weight: 700;
+             letter-spacing: .08em; text-transform: uppercase; text-align: center;
+             border-radius: 12px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22); }
   .eyebrow + h1 { margin-top: 14px; }
   .hero p.fine { margin: 10px 0 0; font-size: 13px; opacity: .9; }
   .res-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
@@ -1644,11 +1645,16 @@ __END__
 <header class="hero">
   <div class="hero-inner">
     <%= erb :brand, layout: false %>
-    <div class="eyebrow">Next-Gen Code-aware Vulnerability Detection for Very Large Codebases</div>
+    <div class="hero-top">
+    <div class="hero-text">
+    <div class="eyebrow">Next-Gen Code-aware Vulnerability Detection<br/> for Very Large Codebases</div>
     <h1>AI SAST for The Enterprise<br></h1>
-    <p class="lead">A swarm of AI agents with proprietary code-aware algorithms that map how every route in your application executes through its auth logic and down to the data it touches, and surface provable 
+    <p class="lead">A swarm of AI agents with proprietary code-aware algorithms that map how every route in your application executes through its auth logic and down to the data it touches, and surface provable
       vulnerabilities.</p>
       <p class=lead>Built for very large enterprise codebases by an Israeli Frontier AI Security Lab, Variablee Code is the #1 performer on industry benchmarks in Enterprise AI SAST vulnerability detection.</p>
+    </div>
+    <%= erb :finding_notice, layout: false %>
+    </div>
     <div class="signin-row">
     <div class="login-card">
       <p><b>Try It On Your Repo.</b> Sign in to run your first scan in minutes.</p>
@@ -1847,6 +1853,301 @@ __END__
   </div>
   <% end %>
 </div>
+
+@@ finding_notice
+<%# Example finding notification for the homepage hero. Compact in the hero; "Show details" opens it full-size in an overlay.
+    Mirrors the standalone design in web/designs/finding_notification.html. %>
+<style>
+  .hero-top { display: grid; grid-template-columns: minmax(0, 1fr) 410px; gap: 40px; align-items: start; }
+  .hero-top .lead { max-width: 600px; }
+  @media (max-width: 900px) { .hero-top { grid-template-columns: 1fr; gap: 0; } .fn-slot { max-width: 520px; margin-bottom: 4px; } }
+
+  .fn { --fn-accent-bg: #f3edff; --fn-amber: #b45309;
+        --fn-add: #e8f8ef; --fn-add-fg: #0b6b45; --fn-del: #fdecee; --fn-del-fg: #a3123a; --fn-code: #faf9fd; --fn-term: #17151f;
+        color: var(--fg); font-size: 15px; line-height: 1.55; text-align: left; }
+  @media (prefers-color-scheme: dark) {
+    .fn { --fn-accent-bg: #251d3d; --fn-amber: #fbbf24;
+          --fn-add: #10291f; --fn-add-fg: #6ee7b7; --fn-del: #2d1520; --fn-del-fg: #fda4af; --fn-code: #14131e; --fn-term: #0c0b12; }
+  }
+  .fn-slot { margin-top: 28px; }
+  .fn-label { display: flex; align-items: center; gap: 8px; margin: 0 0 8px 2px; font-size: 11px; font-weight: 700; letter-spacing: .1em;
+              text-transform: uppercase; color: rgba(255,255,255,.85); }
+  .fn-label::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #6ee7b7; box-shadow: 0 0 0 3px rgba(110,231,183,.25); }
+  .fn-restore { padding: 8px 14px; border-radius: 99px; border: 1px solid rgba(255,255,255,.35); background: rgba(255,255,255,.14);
+                color: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .fn-restore[hidden] { display: none; }
+
+  .fn-card { position: relative; width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden;
+             box-shadow: 0 2px 4px rgba(25,23,43,.08), 0 18px 48px rgba(25,23,43,.28); }
+  .fn-card[hidden] { display: none; }
+  .fn-card code, .fn-card .fn-mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; font-variant-ligatures: none; }
+  .fn-card button { font: inherit; cursor: pointer; }
+  .fn-card :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .fn-close { position: absolute; top: 12px; right: 12px; width: 30px; height: 30px; border-radius: 8px; border: 0; background: transparent;
+              color: var(--muted); display: grid; place-items: center; }
+  .fn-close:hover { background: var(--surface-2); color: var(--fg); }
+  .fn-head { padding: 18px 20px 0; }
+  .fn-from { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); padding-right: 36px; }
+  .fn-from b { color: var(--fg); font-weight: 600; }
+  .fn-logo { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; background: linear-gradient(135deg, #7c3aed, #db2777); flex: none; }
+  .fn-title { margin: 12px 0 5px; font-size: 17px; line-height: 1.35; font-weight: 650; letter-spacing: -.005em; text-wrap: balance; }
+  .fn-lede { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+  .fn-facts { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 14px 0 0; }
+  .fn-facts dt { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .fn-facts dd { margin: 2px 0 0; font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .fn-tag { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+  .fn-tag::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .fn-tag.amber { background: var(--amber-bg); color: var(--fn-amber); }
+  .fn-tag.ready { background: var(--fn-accent-bg); color: var(--accent); }
+  .fn-routes { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
+  .fn-route { padding: 2px 8px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--line); font-size: 11.5px !important; }
+  .fn-route b { color: var(--accent); font-weight: 600; }
+
+  .fn-toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: calc(100% - 40px); margin: 14px 20px 0;
+               padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); text-align: left; }
+  .fn-toggle:hover { background: var(--surface-2); }
+  .fn-toggle .t1 { font-weight: 600; font-size: 13.5px; }
+  .fn-toggle .t2 { display: block; font-size: 12px; color: var(--muted); }
+  .fn-toggle .chev { flex: none; color: var(--muted); transition: transform .2s; }
+  .fn-toggle[aria-expanded="true"] .chev { transform: rotate(180deg); }
+  .fn-toggle[aria-expanded="true"] { border-bottom-left-radius: 0; border-bottom-right-radius: 0; background: var(--surface-2); }
+
+  .fn-details { margin: 0 20px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 10px 10px; padding: 0 16px; }
+  .fn-details[hidden] { display: none; }
+  .fn-sec { padding: 16px 0; border-top: 1px solid var(--line); }
+  .fn-sec:first-child { border-top: 0; }
+  .fn-h { margin: 0 0 8px; font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+  .fn-sec p { margin: 0 0 10px; font-size: 14px; } .fn-sec p:last-child { margin-bottom: 0; }
+  .fn-sec p code, .fn-sec li code { padding: 1px 5px; border-radius: 5px; background: var(--surface-2); border: 1px solid var(--line); font-size: 12px; }
+  .fn-muted { color: var(--muted); }
+
+  .fn-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .fn-pane { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--fn-code); min-width: 0; }
+  .fn-pane-h { font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--muted); }
+  .fn-pane.ok .i { color: var(--green); font-weight: 700; } .fn-pane.bad .i { color: var(--fn-amber); font-weight: 700; }
+  .fn-pane .fn-mono { display: block; font-size: 12px; line-height: 1.7; color: var(--muted); white-space: pre; overflow-x: auto; }
+  .fn-pane mark { background: var(--green-bg); color: var(--green); border-radius: 4px; padding: 0 3px; }
+  .fn-pane .gap { color: var(--fn-amber); background: var(--amber-bg); border-radius: 4px; padding: 0 3px; font-style: italic; }
+  .fn-tally { margin-top: 10px; font-size: 13px !important; color: var(--muted); } .fn-tally strong { color: var(--fg); }
+
+  .fn-diff { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--fn-code); }
+  .fn-diff-h { display: flex; justify-content: space-between; gap: 10px; padding: 7px 12px; border-bottom: 1px solid var(--line); background: var(--surface-2); font-size: 12.5px; }
+  .fn-diff-h .a { color: var(--green); } .fn-diff-h .d { color: var(--red); }
+  .fn-card pre.fn-code { margin: 0; padding: 8px 0; max-height: none; border-radius: 0; background: none; overflow-x: auto; font-size: 12px; line-height: 1.65; }
+  .fn-ln { display: block; padding: 0 12px 0 0; white-space: pre; min-width: max-content; }
+  .fn-ln::before { content: attr(data-s); display: inline-block; width: 24px; text-align: center; color: var(--muted); opacity: .7; }
+  .fn-ln.add { background: var(--fn-add); color: var(--fn-add-fg); } .fn-ln.add::before { color: var(--fn-add-fg); opacity: 1; }
+  .fn-ln.del { background: var(--fn-del); color: var(--fn-del-fg); } .fn-ln.del::before { color: var(--fn-del-fg); opacity: 1; }
+  .fn-ln.hunk { color: var(--accent); opacity: .85; padding-top: 4px; padding-bottom: 4px; }
+  .fn-diff-more { padding: 7px 12px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+  .fn-notes { display: grid; gap: 4px; margin: 12px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--muted); }
+  .fn-notes li::before { content: "✓  "; color: var(--green); font-weight: 700; }
+
+  .fn-poc-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .fn-poc-row p { flex: 1 1 240px; margin: 0 !important; }
+  .fn-btn-2 { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 10px; padding: 7px 13px;
+              background: var(--surface); color: var(--fg); font-weight: 600; font-size: 13px; }
+  .fn-btn-2:hover { background: var(--surface-2); } .fn-btn-2[disabled] { cursor: default; color: var(--muted); }
+  .fn-card pre.fn-term { margin: 12px 0 0; padding: 11px 13px; max-height: none; border-radius: 10px; background: var(--fn-term); color: #d9d6e8;
+                         font-size: 12px; line-height: 1.75; overflow-x: auto; white-space: pre; }
+  .fn-term[hidden] { display: none; }
+  .fn-term .dim { color: #8a86a3; } .fn-term .out { color: #c4b5fd; } .fn-term .in { color: #fbbf24; } .fn-term .ok { color: #6ee7b7; }
+  .fn-term span { display: block; animation: fn-show .2s both; }
+  .fn-result { display: none; margin-top: 10px; padding: 9px 12px; border-radius: 10px; background: var(--amber-bg); color: var(--fn-amber); font-size: 13px; font-weight: 600; }
+  .fn-result.show { display: block; } .fn-result span { font-weight: 400; color: var(--fg); opacity: .8; }
+
+  .fn-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px 14px; flex-wrap: wrap;
+             padding: 12px 20px 14px; margin-top: 16px; border-top: 1px solid var(--line); background: var(--surface-2); }
+  .fn-note { font-size: 12px; color: var(--muted); flex: 1 1 160px; }
+  .fn-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .fn-later { border: 0; background: none; color: var(--muted); font-weight: 600; font-size: 13.5px; padding: 8px; border-radius: 8px; }
+  .fn-later:hover { color: var(--fg); }
+  .fn-approve { display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 10px; padding: 9px 16px; font-weight: 600; font-size: 13.5px;
+                color: #fff; background: #7c3aed; box-shadow: 0 1px 2px rgba(25,23,43,.12); }
+  .fn-approve:hover { background: #6d28d9; } .fn-approve[disabled] { cursor: default; opacity: .85; }
+  .fn-spin { width: 13px; height: 13px; border-radius: 50%; border: 2px solid rgba(127,127,127,.35); border-top-color: currentColor; animation: fn-rot .7s linear infinite; }
+  .fn-done { display: none; align-items: center; gap: 10px; padding: 13px 20px; margin-top: 16px; background: var(--green-bg); color: var(--green);
+             border-top: 1px solid var(--line); font-size: 13.5px; font-weight: 600; }
+  .fn-done a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+  .fn-card.approved .fn-done { display: flex; } .fn-card.approved .fn-foot { display: none; }
+
+  /* Full-size overlay used by "Show details". */
+  .fn-scrim { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: flex-start; justify-content: center; padding: 48px 16px;
+              overflow-y: auto; background: rgba(25,23,43,.42); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); animation: fn-fade .2s ease-out; }
+  @media (prefers-color-scheme: dark) { .fn-scrim { background: rgba(5,4,12,.66); } }
+  .fn-scrim[hidden] { display: none; }
+  .fn-scrim .fn-card { max-width: 640px; animation: fn-rise .28s cubic-bezier(.2,.8,.2,1); }
+  .fn-scrim .fn-head { padding: 22px 24px 0; } .fn-scrim .fn-title { font-size: 19px; } .fn-scrim .fn-lede { font-size: 14.5px; }
+  .fn-scrim .fn-toggle { width: calc(100% - 48px); margin: 16px 24px 0; } .fn-scrim .fn-details { margin: 0 24px; padding: 0 18px; }
+  .fn-scrim .fn-foot { padding: 14px 24px 16px; } .fn-scrim .fn-done { padding: 14px 24px; }
+  @media (max-width: 560px) {
+    .fn-scrim { padding: 16px; } .fn-compare { grid-template-columns: 1fr; }
+    .fn-scrim .fn-head { padding: 18px 18px 0; } .fn-scrim .fn-toggle { width: calc(100% - 36px); margin: 14px 18px 0; }
+    .fn-scrim .fn-details { margin: 0 18px; padding: 0 14px; } .fn-scrim .fn-foot { padding: 12px 18px 14px; }
+  }
+  @keyframes fn-fade { from { opacity: 0; } }
+  @keyframes fn-rise { from { opacity: 0; transform: translateY(12px) scale(.99); } }
+  @keyframes fn-show { from { opacity: 0; } }
+  @keyframes fn-rot { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .fn-scrim, .fn-scrim .fn-card, .fn-term span { animation: none; } }
+</style>
+
+<div class="fn fn-slot" id="fn-slot">
+  <div class="fn-label" id="fn-label">Example finding notification</div>
+  <button type="button" class="fn-restore" id="fn-restore" hidden>Show example notification</button>
+  <article class="fn-card" id="fn-card" aria-labelledby="fn-title">
+    <button type="button" class="fn-close" id="fn-close" aria-label="Close">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <div class="fn-head">
+      <div class="fn-from">
+        <span class="fn-logo"><svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path d="M5 6l7 13 7-13" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span><b>Daily scan</b> · acme/agent-api · Nov 11</span>
+      </div>
+      <div class="fn-title" id="fn-title">Ownership check missing on 3 thread routes</div>
+      <p class="fn-lede">These routes let a signed-in user start a run on a thread that belongs to someone else. We've drafted a fix that uses the same check as your other thread routes.</p>
+      <dl class="fn-facts">
+        <div><dt>Type</dt><dd>BOLA</dd></div>
+        <div><dt>Severity</dt><dd><span class="fn-tag amber">High</span></dd></div>
+        <div><dt>Confidence</dt><dd>95%</dd></div>
+        <div><dt>Fix</dt><dd><span class="fn-tag ready">Ready for review</span></dd></div>
+      </dl>
+      <div class="fn-routes">
+        <span class="fn-route fn-mono"><b>POST</b> /threads/{thread_id}/runs</span>
+        <span class="fn-route fn-mono"><b>POST</b> /threads/{thread_id}/runs/stream</span>
+        <span class="fn-route fn-mono"><b>POST</b> /threads/{thread_id}/runs/wait</span>
+      </div>
+    </div>
+
+    <button type="button" class="fn-toggle" id="fn-toggle" aria-expanded="false" aria-controls="fn-details">
+      <span><span class="t1" id="fn-toggle-label">Show details</span><span class="t2">Explanation, code diff, proof of concept</span></span>
+      <svg class="chev" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
+    <div class="fn-details" id="fn-details" hidden>
+      <div class="fn-sec">
+        <div class="fn-h">What's happening</div>
+        <p>Each route reads <code>thread_id</code> from the URL, loads that thread, and starts a run on it. The caller must be signed in, but the route doesn't check that the thread belongs to them.</p>
+        <p class="fn-muted">So a run can read and add to another user's thread history if the caller knows or guesses its ID.</p>
+      </div>
+      <div class="fn-sec">
+        <div class="fn-h">What's missing</div>
+        <p>Your other <code>/threads/{thread_id}</code> routes filter by owner. These three load the thread by ID alone.</p>
+        <div class="fn-compare">
+          <div class="fn-pane ok"><div class="fn-pane-h"><span class="i">✓</span> GET /threads/{thread_id}</div><span class="fn-mono">select(ThreadORM).where(
+  ThreadORM.thread_id == thread_id,
+  <mark>ThreadORM.user_id == user.identity</mark>
+)</span></div>
+          <div class="fn-pane bad"><div class="fn-pane-h"><span class="i">!</span> POST /threads/{thread_id}/runs</div><span class="fn-mono">session.get(ThreadORM, thread_id)
+
+<span class="gap">no owner filter</span></span></div>
+        </div>
+        <p class="fn-tally"><strong>12 of 15</strong> thread routes check ownership. These 3 don't.</p>
+      </div>
+      <div class="fn-sec">
+        <div class="fn-h">Proposed fix</div>
+        <div class="fn-diff">
+          <div class="fn-diff-h"><span class="fn-mono">api/runs.py</span><span class="fn-mono"><span class="a">+14</span> <span class="d">−9</span></span></div>
+<pre class="fn-code fn-mono"><span class="fn-ln hunk" data-s=" ">@@ helper, shared by all three routes @@</span><span class="fn-ln add" data-s="+">async def get_thread_for_user(session, thread_id, user):</span><span class="fn-ln add" data-s="+">    thread = await session.scalar(</span><span class="fn-ln add" data-s="+">        select(ThreadORM).where(</span><span class="fn-ln add" data-s="+">            ThreadORM.thread_id == thread_id,</span><span class="fn-ln add" data-s="+">            ThreadORM.user_id == user.identity,</span><span class="fn-ln add" data-s="+">        )</span><span class="fn-ln add" data-s="+">    )</span><span class="fn-ln add" data-s="+">    if not thread:</span><span class="fn-ln add" data-s="+">        raise HTTPException(404, "Thread not found")</span><span class="fn-ln add" data-s="+">    return thread</span><span class="fn-ln" data-s=" "> </span><span class="fn-ln hunk" data-s=" ">@@ @router.post("/threads/{thread_id}/runs") @@</span><span class="fn-ln" data-s=" ">async def create_run(thread_id, body, user):</span><span class="fn-ln del" data-s="−">    thread = await session.get(ThreadORM, thread_id)</span><span class="fn-ln del" data-s="−">    if not thread:</span><span class="fn-ln del" data-s="−">        raise HTTPException(404, "Thread not found")</span><span class="fn-ln add" data-s="+">    thread = await get_thread_for_user(session, thread_id, user)</span><span class="fn-ln" data-s=" ">    return await start_run(session, thread, body, user)</span></pre>
+          <div class="fn-diff-more">Same one-line change in <code>/runs/stream</code> and <code>/runs/wait</code>.</div>
+        </div>
+        <ul class="fn-notes">
+          <li>Same owner filter your other 12 thread routes use.</li>
+          <li>Returns 404 rather than 403, so thread IDs can't be probed.</li>
+          <li>Includes a test: another user's request to each route gets 404.</li>
+        </ul>
+      </div>
+      <div class="fn-sec">
+        <div class="fn-h">Proof of concept</div>
+        <div class="fn-poc-row">
+          <p class="fn-muted">Run it against <code>staging</code> with two test accounts. User B tries to start a run on user A's thread. Nothing touches production.</p>
+          <button type="button" class="fn-btn-2" id="fn-poc"><svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M7 5l12 7-12 7z" fill="currentColor"/></svg><span>Run proof of concept</span></button>
+        </div>
+        <pre class="fn-term fn-mono" id="fn-term" hidden></pre>
+        <div class="fn-result" id="fn-result" role="status" aria-live="polite">Confirmed on staging. <span>User B started a run on user A's thread (200 instead of 404).</span></div>
+      </div>
+    </div>
+
+    <div class="fn-foot">
+      <span class="fn-note">Opens a pull request for your review. Nothing merges automatically.</span>
+      <div class="fn-actions">
+        <button type="button" class="fn-later" id="fn-later">Later</button>
+        <button type="button" class="fn-approve" id="fn-approve">Approve &amp; open PR</button>
+      </div>
+    </div>
+    <div class="fn-done" role="status" aria-live="polite">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Pull request <a href="#" onclick="return false">#482</a> is open for review.</span>
+    </div>
+  </article>
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var slot = $("fn-slot"), card = $("fn-card"), toggle = $("fn-toggle"), details = $("fn-details");
+  // The overlay lives on <body> so it sits above everything, outside the hero's stacking context.
+  var scrim = document.createElement("div");
+  scrim.className = "fn fn-scrim"; scrim.hidden = true;
+  scrim.setAttribute("role", "dialog"); scrim.setAttribute("aria-modal", "true"); scrim.setAttribute("aria-labelledby", "fn-title");
+  document.body.appendChild(scrim);
+
+  function expand() {
+    slot.style.minHeight = slot.offsetHeight + "px";   // keep the hero from jumping while the card is away
+    scrim.appendChild(card); scrim.hidden = false;
+    details.hidden = false; toggle.setAttribute("aria-expanded", "true"); $("fn-toggle-label").textContent = "Hide details";
+    document.documentElement.style.overflow = "hidden";
+    $("fn-close").focus();
+  }
+  function collapse() {
+    slot.appendChild(card); scrim.hidden = true; slot.style.minHeight = "";
+    details.hidden = true; toggle.setAttribute("aria-expanded", "false"); $("fn-toggle-label").textContent = "Show details";
+    document.documentElement.style.overflow = "";
+    toggle.focus();
+  }
+  function dismiss() { card.hidden = true; $("fn-label").hidden = true; $("fn-restore").hidden = false; }
+  function close() { if (!scrim.hidden) collapse(); else dismiss(); }
+
+  toggle.addEventListener("click", function () { scrim.hidden ? expand() : collapse(); });
+  $("fn-close").addEventListener("click", close);
+  $("fn-later").addEventListener("click", close);
+  $("fn-restore").addEventListener("click", function () { card.hidden = false; $("fn-label").hidden = false; this.hidden = true; });
+  scrim.addEventListener("click", function (e) { if (e.target === scrim) collapse(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !scrim.hidden) collapse(); });
+
+  $("fn-approve").addEventListener("click", function () {
+    var b = this; b.disabled = true;
+    b.innerHTML = '<span class="fn-spin" aria-hidden="true"></span><span>Opening PR…</span>';
+    setTimeout(function () { card.classList.add("approved"); }, 1000);
+  });
+
+  // Simulated proof-of-concept run.
+  var POC = [
+    ["dim", "$ variablee poc --env staging --finding BOLA-0142"],
+    ["dim", "  signed in as test-user-a, test-user-b"],
+    ["out", "→ POST /threads   as test-user-a"],
+    ["in",  "← 200  thread_id=thr_7c41e9"],
+    ["out", "→ POST /threads/thr_7c41e9/runs   as test-user-b"],
+    ["in",  "← 200  run_id=run_19ab02   (expected 404)"],
+    ["out", "→ GET  /threads/thr_7c41e9/runs/run_19ab02   as test-user-a"],
+    ["in",  "← 200  status=running  started_by=test-user-b"],
+    ["ok",  "✓ reproduced in 1.8s"]
+  ];
+  var PLAY = '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M7 5l12 7-12 7z" fill="currentColor"/></svg>';
+  $("fn-poc").addEventListener("click", function () {
+    var b = this, term = $("fn-term");
+    b.disabled = true; b.innerHTML = '<span class="fn-spin" aria-hidden="true"></span><span>Running…</span>';
+    term.hidden = false; term.textContent = ""; $("fn-result").classList.remove("show");
+    POC.forEach(function (row, i) {
+      setTimeout(function () {
+        var s = document.createElement("span"); s.className = row[0]; s.textContent = row[1]; term.appendChild(s);
+        if (i === POC.length - 1) { $("fn-result").classList.add("show"); b.disabled = false; b.innerHTML = PLAY + "<span>Run again</span>"; }
+      }, 250 + i * 260);
+    });
+  });
+})();
+</script>
 
 @@ contact
 <% c = session.delete(:contact) || {}; v = c["values"] || {}
