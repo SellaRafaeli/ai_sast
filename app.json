@@ -20,6 +20,8 @@
     "SESSION_SECRET": { "description": "Signs the sign-in cookie", "generator": "secret" },
     "ALLOWED_DOMAINS": { "description": "Only these email domains may sign in, comma-separated (empty: any Google account)", "required": false },
     "ALLOWED_EMAILS": { "description": "Only these Google accounts may sign in, comma-separated (empty: any)", "required": false },
-    "ADMIN_EMAILS": { "description": "Accounts that see every user's scans, comma-separated", "value": "sella.rafaeli@gmail.com" }
+    "ADMIN_EMAILS": { "description": "Accounts that see every user's scans, comma-separated", "value": "sella.rafaeli@gmail.com" },
+    "VISIT_EMAILS": { "description": "0 to stop the email for each page visit", "value": "1" },
+    "DAILY_SUMMARY_HOUR": { "description": "Hour (UTC) of the daily activity summary email", "value": "6" }
   }
 }

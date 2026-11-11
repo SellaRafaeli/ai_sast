@@ -561,13 +561,15 @@ LEGAL = {
         "Account information. When you sign in with Google we receive your name, email address and profile picture. We record when you first and last signed in and how many times.",
         "Scan information. For each scan we store the repository URL you submit, the commit scanned, who started the scan and who ran its analysis, timestamps, a log of the scan, and its results: the routes found, their call trees, and the findings, which can include short excerpts of the scanned code.",
         "Repository code. We clone the public repository you submit to analyze it. The clone is deleted as soon as the trace finishes. The trace of each route, including that route's code, is kept until you run the analysis (or until the scan is deleted), then deleted.",
+        "Usage information. We record the pages you open on our site, with the time, your IP address, browser and the page you came from, to understand how the service is used. Our team is notified of visits.",
         "Contact requests. When you write to us through the contact form we receive your name, email address, company (if given) and message, and the page and IP address it was sent from.",
         "Technical information. We use a single cookie to keep you signed in. Our servers keep standard logs (such as IP addresses and request times) for security and troubleshooting."
       ]],
       ["How we use information", [
         "To run the scans you request and show you their results.",
         "To operate, secure and improve Variablee Code, including notifying our team when scans are started and completed.",
-        "To reply to messages you send us, and to communicate with you about the service."
+        "To reply to messages you send us, and to communicate with you about the service.",
+        "To understand how the site is used, including a daily summary of activity for our team."
       ]],
       ["AI analysis",
         "When you run an analysis, the traced code of each route is sent to a large language model provider (Anthropic or OpenAI) through its API to evaluate it. These providers process the code under their API terms. We do not send your account information to them."],
@@ -678,6 +680,139 @@ post "/contact" do
                 reply_to: f["email"])
   session[:contact] = { "sent" => true }
   redirect to("#{back}#contact")
+end
+
+# ── page visits: recorded, and emailed to NOTIFY_EMAIL ──
+# Every HTML page served is saved in `visits`. One email per visit, except repeats of the same page by the
+# same visitor within VISIT_EMAIL_QUIET minutes (a running scan's page reloads itself every 3 seconds) and
+# obvious bots. VISIT_EMAILS=0 turns the emails off; visits are still recorded.
+VISITS = DB[:visits]
+VISITS.indexes.create_one(created_at: -1)
+VISITS.indexes.create_one(visitor: 1, path: 1, created_at: -1)
+VISIT_EMAILS = ENV["VISIT_EMAILS"] != "0"
+VISIT_EMAIL_QUIET = Integer(ENV.fetch("VISIT_EMAIL_QUIET", "10")) # minutes
+BOT_UA = /bot|crawl|spider|slurp|preview|monitor|headless|curl|wget|python-requests|go-http|uptime|pingdom/i
+NO_VISIT = %r{\A/(__live|auth/|logout)|/live\z|\.json\z}
+
+after do
+  # pages only: Sinatra adds the default text/html type after this filter runs, so an unset type is a page too
+  type = response.content_type.to_s
+  next unless request.get? && response.status == 200 && (type.empty? || type.start_with?("text/html"))
+  next if request.path_info.match?(NO_VISIT)
+  record_visit
+rescue => e
+  warn "[visit] #{e.class}: #{e.message}"
+end
+
+helpers do
+  def record_visit
+    user = current_user
+    ua = request.user_agent.to_s[0, 300]
+    visitor = user ? user["email"] : Digest::SHA256.hexdigest("#{request.ip}|#{ua}")[0, 16]
+    path = request.fullpath[0, 300]
+    now = Time.now.utc
+    bot = ua.match?(BOT_UA)
+    repeat = VISITS.find(visitor: visitor, path: path, created_at: { "$gt" => now - VISIT_EMAIL_QUIET * 60 }).limit(1).first
+    emailed = VISIT_EMAILS && !bot && !repeat
+    VISITS.insert_one(created_at: now, path: path, visitor: visitor, user_email: user&.dig("email"), user_name: user&.dig("name"),
+                      ip: request.ip, user_agent: ua, referrer: request.referer.to_s[0, 300], bot: bot, emailed: emailed)
+    return unless emailed
+    who = user ? "#{user['name']} <#{user['email']}>" : "Anonymous visitor (#{request.ip})"
+    postmark_send("Variablee Code · Visit: #{path} by #{user ? user['name'] : 'anonymous'}",
+                  ["#{who} opened #{request.base_url}#{path}",
+                   "Time: #{now.strftime('%Y-%m-%d %H:%M:%S UTC')}",
+                   "Came from: #{request.referer.to_s.empty? ? '(direct)' : request.referer}",
+                   "Browser: #{ua.empty? ? '-' : ua}",
+                   "— Variablee Code"].join("\n\n"))
+  end
+end
+
+# ── daily summary email ──
+# Once a day at DAILY_SUMMARY_HOUR (UTC), email NOTIFY_EMAIL what happened in the last 24 hours. A background
+# thread checks every 10 minutes; `meta.daily_summary` remembers the last day sent, so a restart doesn't resend,
+# and a server that was asleep at that hour sends it when it wakes. DAILY_SUMMARY=0 turns it off.
+META = DB[:meta]
+DAILY_SUMMARY = ENV["DAILY_SUMMARY"] != "0"
+DAILY_SUMMARY_HOUR = Integer(ENV.fetch("DAILY_SUMMARY_HOUR", "6"))
+
+def daily_summary_text(from, to)
+  fmt = ->(t) { t.utc.strftime("%b %-d %H:%M UTC") }
+  visits = VISITS.find(created_at: { "$gte" => from, "$lt" => to }, bot: { "$ne" => true }).to_a
+  people = visits.group_by { |v| v["visitor"] }
+  named = visits.filter_map { |v| v["user_email"] && "#{v['user_name']} <#{v['user_email']}>" }.tally.sort_by { |_, n| -n }
+  pages = visits.map { |v| v["path"].split("?").first }.tally.sort_by { |_, n| -n }.first(10)
+  refs = visits.map { |v| v["referrer"].to_s }.reject { |r| r.empty? || r.include?("/scans/") }.map { |r| r[%r{\Ahttps?://([^/?#]+)}, 1] || r }.tally.sort_by { |_, n| -n }.first(5)
+  new_users = USERS.find(first_login_at: { "$gte" => from, "$lt" => to }).to_a
+  scans = SCANS.find(created_at: { "$gte" => from, "$lt" => to }).sort(created_at: 1)
+               .projection(repo_url: 1, status: 1, requested_by: 1, route_count: 1, verdicts: 1, error: 1, created_at: 1).to_a
+  analyzed = SCANS.count_documents(analysis_finished_at: { "$gte" => from, "$lt" => to })
+  contacts = CONTACTS.find(created_at: { "$gte" => from, "$lt" => to }).sort(created_at: 1).to_a
+  bots = VISITS.count_documents(created_at: { "$gte" => from, "$lt" => to }, bot: true)
+
+  out = ["Variablee Code — daily summary", "#{fmt.(from)} to #{fmt.(to)}", ""]
+  out << "VISITS: #{visits.size} page views from #{people.size} visitors (#{named.size} signed in)#{bots.positive? ? "; #{bots} more from bots" : ''}"
+  out += named.first(15).map { |w, n| "  #{w}: #{n} pages" }
+  out << "Top pages:" if pages.any?
+  out += pages.map { |p, n| "  #{n.to_s.rjust(4)}  #{p}" }
+  out << "Came from: #{refs.map { |r, n| "#{r} (#{n})" }.join(', ')}" if refs.any?
+  out << ""
+  out << "NEW USERS: #{new_users.size}"
+  out += new_users.map { |u| "  #{u['name']} <#{u['_id']}>" }
+  out << ""
+  out << "SCANS: #{scans.size} started, #{analyzed} analyses finished"
+  scans.each do |s|
+    v = s["verdicts"]
+    result = if v then "#{v['likely'].to_i} likely, #{v['possible'].to_i} possible of #{s['route_count']} routes"
+             elsif s["status"] == "failed" then "failed: #{s['error'].to_s[0, 80]}"
+             else "#{s['status']}#{s['route_count'] ? ", #{s['route_count']} routes" : ''}"
+             end
+    by = s["requested_by"] ? s["requested_by"]["email"] : "anonymous"
+    out << "  #{fmt.(s['created_at'])}  #{repo_name(s['repo_url']).first}  by #{by}  — #{result}"
+  end
+  out << ""
+  out << "CONTACT MESSAGES: #{contacts.size}"
+  contacts.each do |c|
+    out << "  #{c['name']} <#{c['email']}>#{c['company'].to_s.empty? ? '' : " (#{c['company']})"}: #{c['message'].to_s.gsub(/\s+/, ' ')[0, 200]}"
+  end
+  out << "" << "— Variablee Code"
+  out.join("\n")
+end
+
+# Send the summary for the 24 hours ending at today's DAILY_SUMMARY_HOUR, once that hour has passed.
+def maybe_send_daily_summary(now = Time.now.utc)
+  return unless DAILY_SUMMARY && !ENV["POSTMARK_API_TOKEN"].to_s.empty?
+  due = Time.utc(now.year, now.month, now.day, DAILY_SUMMARY_HOUR)
+  return if now < due
+  day = due.strftime("%Y-%m-%d")
+  before = META.find_one_and_update({ _id: "daily_summary" }, { "$set" => { "last" => day, "sent_at" => now } },
+                                    upsert: true, return_document: :before)
+  return if before && before["last"] == day # already sent today
+  postmark_send("Variablee Code · Daily summary for #{(due - 86_400).strftime('%b %-d')}–#{due.strftime('%b %-d')}",
+                daily_summary_text(due - 86_400, due))
+end
+
+Thread.new do
+  loop do
+    begin
+      maybe_send_daily_summary
+    rescue => e
+      warn "[summary] #{e.class}: #{e.message}"
+    end
+    sleep 600
+  end
+end
+
+# Admins: preview the last 24 hours' summary, or send it now (?send=1).
+get "/admin/daily-summary" do
+  halt 404 unless admin?
+  now = Time.now.utc
+  text = daily_summary_text(now - 86_400, now)
+  if params[:send] == "1"
+    postmark_send("Variablee Code · Summary of the last 24 hours (sent by hand)", text)
+    text = "[sent to #{NOTIFY_EMAIL}]\n\n#{text}"
+  end
+  content_type :text
+  text
 end
 
 # Research index: the white paper and blog posts.

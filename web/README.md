@@ -154,6 +154,8 @@ Changes can take a few minutes to apply. A `redirect_uri_mismatch` error from Go
 | `ALLOWED_DOMAINS` | Only Google accounts with these email domains may sign in, comma-separated | any |
 | `ALLOWED_EMAILS` | Only these Google accounts may sign in, comma-separated (combined with `ALLOWED_DOMAINS`) | any |
 | `ADMIN_EMAILS` | These accounts see every user's scans, comma-separated | `sella.rafaeli@gmail.com` |
+| `VISIT_EMAILS` | `0` to stop the email for each page visit (visits are still recorded in the `visits` collection). Repeat views of the same page by the same visitor within `VISIT_EMAIL_QUIET` minutes, and bots, are never emailed. | on, `10` |
+| `DAILY_SUMMARY`, `DAILY_SUMMARY_HOUR` | Daily email to `NOTIFY_EMAIL` with the last 24 hours of visits, new users, scans, results and contact messages, sent at this hour (UTC). `0` turns it off. Admins can preview it at `/admin/daily-summary` (add `?send=1` to send it now). On an eco dyno that sleeps, it's sent when the dyno wakes. | on, `6` |
 | `ANALYZE_BATCH`, `ANALYZE_JOBS` | Routes per LLM call, and LLM calls in parallel, for the analysis. Results appear on the scan page as each call finishes (`analyze_bola.rb --partial`), so smaller batches show results sooner. | `5`, `4` |
 | `MAX_REPO_MB` | Refuse repos bigger than this after cloning | `500` |
 | `MAX_QUEUE` | Refuse new scans when this many are waiting | `10` |
