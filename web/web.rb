@@ -368,18 +368,46 @@ ensure
   %i[defs routes traces].each { |c| DB[c].delete_many(repo: repo_dir) } if repo_dir rescue nil
 end
 
+# Smaller batches than the CLI default (10) so results reach the page sooner; more of them run in parallel.
+ANALYZE_BATCH = Integer(ENV.fetch("ANALYZE_BATCH", "5"))
+ANALYZE_JOBS  = Integer(ENV.fetch("ANALYZE_JOBS", "4"))
+
+# Copy the verdicts written so far (one JSON line per route) into the scan, if there are new ones.
+def save_partial(id, file)
+  return unless File.file?(file)
+  rows = File.readlines(file, chomp: true).filter_map { |l| JSON.parse(l) rescue nil } # a half-written last line is skipped
+  return if rows.size == SCANS.find(_id: id).projection(partial_count: 1).first&.dig("partial_count").to_i
+  findings = rows.map { |f| f.slice(*FINDING_KEYS) }
+  update(id, "partial_findings" => findings, "partial_count" => findings.size)
+rescue => e
+  warn "[partial] #{e.class}: #{e.message}"
+end
+
 # 3. ANALYZE: the LLM scores each traced route, from the trace kept in `scan_traces`.
 def analyze(id)
   doc = SCANS.find(_id: id).first or return
   work = Dir.mktmpdir("analyze-")
-  update(id, "status" => "analyzing", "model" => LLM.describe, "analysis_started_at" => Time.now.utc, "analysis_error" => nil)
+  update(id, "status" => "analyzing", "model" => LLM.describe, "analysis_started_at" => Time.now.utc, "analysis_error" => nil,
+             "partial_findings" => [], "partial_count" => 0)
   event(id, "Analysis started", send_email: false)
   saved = TRACES.find(_id: id).first or raise "the saved trace is gone; please scan the repo again"
   trace_json = File.join(work, "trace.json")
   File.binwrite(trace_json, Zlib::Inflate.inflate(saved["data"].data))
   report = File.join(work, "bola_report")
-  ok, = run(id, { "MONGO_URL" => MONGO_URL }, ruby_script("analyze_bola.rb", trace_json, "--out", report),
+  # analyze_bola.rb appends each batch's verdicts to this file as soon as the batch finishes; copy them into the
+  # scan every 2 seconds so the page can show results while the rest are still being reviewed.
+  partial = File.join(work, "partial.jsonl")
+  watcher = Thread.new do
+    loop do
+      sleep 2
+      save_partial(id, partial)
+    end
+  end
+  ok, = run(id, { "MONGO_URL" => MONGO_URL },
+            ruby_script("analyze_bola.rb", trace_json, "--out", report, "--batch", ANALYZE_BATCH.to_s,
+                        "--jobs", ANALYZE_JOBS.to_s, "--partial", partial),
             chdir: work, timeout: ANALYZE_TIMEOUT)
+  watcher.kill
   raise "the analysis failed (see the log)" unless ok && File.file?("#{report}.json")
 
   r = JSON.parse(File.read("#{report}.json"))
@@ -387,7 +415,7 @@ def analyze(id)
   verdicts = findings.map { |f| f["verdict"] }.tally
   top_finding = findings.find { |f| %w[likely possible].include?(f["verdict"]) }&.slice("route", "score", "verdict")
   update(id, "status" => "done", "findings" => findings, "model" => r["model"], "verdicts" => verdicts, "top_finding" => top_finding,
-             "analysis_finished_at" => Time.now.utc)
+             "analysis_finished_at" => Time.now.utc, "partial_findings" => nil)
   TRACES.delete_one(_id: id)
   top = findings.select { |f| %w[likely possible].include?(f["verdict"]) }.first(10)
                 .map { |f| "  #{f['score']}  #{f['verdict'].ljust(8)} #{f['route']}" }
@@ -806,9 +834,17 @@ get "/scans/:id.json" do
   JSON.pretty_generate(scan)
 end
 
+# The live results panel alone, polled by the scan page every few seconds while the analysis runs.
+get "/scans/:id/live" do
+  @scan = find_scan!(params[:id])
+  headers "X-Scan-Status" => @scan["status"].to_s, "Cache-Control" => "no-store"
+  erb :live, layout: false
+end
+
 get "/scans/:id" do
   @scan = find_scan!(params[:id])
   @active = ACTIVE.include?(@scan["status"])
+  @live = %w[analysis_queued analyzing].include?(@scan["status"]) # results stream in; the page polls instead of reloading
   @ahead = @scan["status"] == "queued" ? SCANS.count_documents(status: "queued", created_at: { "$lt" => @scan["created_at"] }) : 0
   @title = repo_name(@scan["repo_url"]).first
   erb :scan
@@ -822,7 +858,7 @@ __END__
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<% if @active %><meta http-equiv="refresh" content="3"><% end %>
+<% if @active && !@live %><meta http-equiv="refresh" content="3"><% end %>
 <title><%= @title ? "#{h @title} · " : '' %>Variablee Code · AI vulnerability detection for large codebases</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%236d28d9'/><path d='M9 10l7 13 7-13' stroke='white' stroke-width='3.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -908,6 +944,21 @@ __END__
 .contact-form .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .contact-ok { padding: 18px; border-radius: 12px; background: var(--green-bg); color: var(--green); }
 .contact-err { padding: 10px 14px; border-radius: 10px; background: var(--red-bg); color: var(--red); font-size: 14px; }
+.live-head { padding: 16px 20px; }
+.live-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.live-top .flag-count { color: var(--red); font-weight: 600; }
+.live-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); animation: blink 1.4s ease-in-out infinite; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+.live-bar { height: 6px; border-radius: 99px; background: var(--surface-2); margin-top: 12px; overflow: hidden; }
+.live-bar > span { display: block; height: 100%; background: var(--accent); border-radius: 99px; transition: width .6s; }
+.pending { color: var(--muted); font-size: 12px; font-weight: 600; }
+.pending::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px;
+                   background: var(--amber); animation: blink 1.4s ease-in-out infinite; }
+.fresh { animation: fresh 2.4s ease-out; }
+@keyframes fresh { 0% { background-color: rgba(124,58,237,.18); } 100% { background-color: transparent; } }
+.card.finding.fresh { animation: fresh-card 2.4s ease-out; }
+@keyframes fresh-card { 0% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: var(--shadow); } }
+@media (prefers-reduced-motion: reduce) { .live-dot, .pending::before, .fresh, .card.finding.fresh { animation: none; } }
   .soon-note { margin: 12px 0 0 !important; padding: 10px 12px; border-radius: 10px; background: rgba(25,23,43,.45); font-size: 14px; }
   .legal ul { padding-left: 20px; } .legal li { margin: 4px 0; } .legal .intro { font-size: 16px; }
   .posts { display: grid; gap: 14px; } .post { display: block; color: inherit; }
@@ -1184,9 +1235,9 @@ __END__
               "cloning" => "Cloning the repo…", "tracing" => "Tracing routes through filters and handlers…",
               "analysis_queued" => "The analysis starts when the scans ahead of it finish…",
               "analyzing" => (progress ? "Asking the LLM: batch #{progress[0]} of #{progress[1]} done…" : "Asking the LLM about each route…") }[s['status']] %>
-        <span style="opacity:.75">This page refreshes every 3 seconds.</span>
+        <span style="opacity:.75"><%= @live ? "Results appear below as each batch is reviewed." : "This page refreshes every 3 seconds." %></span>
       </div>
-      <% if progress %><div class="bar"><span style="width:<%= (100.0 * progress[0] / [progress[1], 1].max).round %>%"></span></div><% end %>
+      <% if progress && !@live %><div class="bar"><span style="width:<%= (100.0 * progress[0] / [progress[1], 1].max).round %>%"></span></div><% end %>
     <% end %>
   </div>
 </header>
@@ -1220,6 +1271,7 @@ __END__
   <% end %>
   <% (s['warnings'] || []).each do |w| %><div class="notice bad"><b>Incomplete trace:</b> <%= h w %></div><% end %>
   <% if present?(s['analysis_note']) %><div class="notice"><%= h s['analysis_note'] %></div><% end %>
+  <% if @live %><div id="live"><%= erb :live, layout: false %></div><% end %>
   <% if s['status'] == 'done' && routes.empty? %>
     <div class="notice">No routes that take input were found. The tracer may not support this framework yet.</div>
   <% end %>
@@ -1231,23 +1283,7 @@ __END__
       <h2>Flagged routes <span class="count">· <%= flagged.size %></span></h2>
       <p class="muted" style="margin-top:-6px">Ranked by <%= h s['model'] %>. Check each one by hand: the trace is static and may miss a check.</p>
       <% flagged.each do |f| %>
-      <div class="card finding <%= h f['verdict'] %>">
-        <div class="ring" style="background:conic-gradient(<%= score_color(f['score']) %> <%= f['score'].to_i * 3.6 %>deg, var(--surface-2) 0)">
-          <span style="color:<%= score_color(f['score']) %>"><%= h f['score'] %></span>
-        </div>
-        <div>
-          <div class="route mono"><%= h f['route'] %><span class="verdict <%= h f['verdict'] %>"><%= h f['verdict'] %></span></div>
-          <div class="handler"><%= h f['handler'] %><% if present?(f['framework']) %> · <%= h f['framework'] %><% end %></div>
-          <p class="why"><%= h f['reason'] %></p>
-          <dl class="kv">
-            <% if present?(f['object']) %><dt>Object</dt><dd><%= h f['object'] %></dd><% end %>
-            <% if present?(f['data_access']) %><dt>Data access</dt><dd class="mono"><%= h f['data_access'] %></dd><% end %>
-            <% if present?(f['auth_checks']) %><dt>Auth checks</dt><dd><%= h f['auth_checks'] %></dd><% end %>
-            <% if present?(f['evidence']) %><dt>Evidence</dt><dd class="mono"><%= h f['evidence'] %></dd><% end %>
-          </dl>
-          <% if present?(f['fix']) %><div class="fix"><b>Fix:</b> <%= h f['fix'] %></div><% end %>
-        </div>
-      </div>
+      <%= erb :finding_card, layout: false, locals: { f: f } %>
       <% end %>
     <% end %>
 
@@ -1299,6 +1335,29 @@ __END__
   <div class="card"><details <%= 'open' if @active || s['status'] == 'failed' %>><summary>Log</summary>
     <pre id="log"><%= h s['log'] %></pre></details></div>
 </main>
+<% if @live %>
+<script>
+  // While the analysis runs: refresh the live panel every 3 seconds, highlight what's new, and reload the
+  // whole page once the analysis is over (to show the final, ranked results).
+  (function () {
+    var url = "/scans/<%= h s['_id'] %>/live";
+    setInterval(function () {
+      fetch(url, { cache: "no-store", credentials: "same-origin" }).then(function (r) {
+        var st = r.headers.get("X-Scan-Status");
+        if (!r.ok || (st !== "analyzing" && st !== "analysis_queued")) { location.reload(); return null; }
+        return r.text();
+      }).then(function (html) {
+        var box = document.getElementById("live");
+        if (html == null || !box) return;
+        var seen = {};
+        box.querySelectorAll("[data-k]").forEach(function (e) { seen[e.getAttribute("data-k")] = 1; });
+        box.innerHTML = html;
+        box.querySelectorAll("[data-k]").forEach(function (e) { if (!seen[e.getAttribute("data-k")]) e.classList.add("fresh"); });
+      }).catch(function () {});
+    }, 3000);
+  })();
+</script>
+<% end %>
 <script>
   // Keep the log scrolled to the end while the scan runs; throw confetti when a scan you watched finishes.
   (function () {
@@ -1605,8 +1664,8 @@ __END__
 
 @@ badges
 <% badges = [
-     ["Benchmark", "96% recall", "96% of documented BOLAs caught in industry benchmark apps"]     ,
-     ["Speed", "Seconds to map", "42 RailsGoat routes traced in 3 seconds; AI review in about 2 minutes"],
+     ["Accurate", "96% recall", "96% of documented BOLAs caught in industry benchmark apps, <3% false positives"]     ,
+     ["Fast", "Seconds to map", "42 RailsGoat routes traced in 3 seconds; AI review in about 2 minutes"],
      ["Polyglot", "Python, Ruby, NodeJS", "Expected in 2027: PHP, Java"],
    ] %>
 <div class="badges">
@@ -1655,3 +1714,56 @@ __END__
     </form>
   </div>
 </section>
+
+@@ finding_card
+<div class="card finding <%= h f['verdict'] %>" data-k="card|<%= h f['route'] %>">
+  <div class="ring" style="background:conic-gradient(<%= score_color(f['score']) %> <%= f['score'].to_i * 3.6 %>deg, var(--surface-2) 0)">
+    <span style="color:<%= score_color(f['score']) %>"><%= h f['score'] %></span>
+  </div>
+  <div>
+    <div class="route mono"><%= h f['route'] %><span class="verdict <%= h f['verdict'] %>"><%= h f['verdict'] %></span></div>
+    <div class="handler"><%= h f['handler'] %><% if present?(f['framework']) %> · <%= h f['framework'] %><% end %></div>
+    <p class="why"><%= h f['reason'] %></p>
+    <dl class="kv">
+      <% if present?(f['object']) %><dt>Object</dt><dd><%= h f['object'] %></dd><% end %>
+      <% if present?(f['data_access']) %><dt>Data access</dt><dd class="mono"><%= h f['data_access'] %></dd><% end %>
+      <% if present?(f['auth_checks']) %><dt>Auth checks</dt><dd><%= h f['auth_checks'] %></dd><% end %>
+      <% if present?(f['evidence']) %><dt>Evidence</dt><dd class="mono"><%= h f['evidence'] %></dd><% end %>
+    </dl>
+    <% if present?(f['fix']) %><div class="fix"><b>Fix:</b> <%= h f['fix'] %></div><% end %>
+  </div>
+</div>
+
+@@ live
+<% s = @scan; rows = s['partial_findings'] || []; total = [s['route_count'].to_i, rows.size].max; done = rows.size
+   by_route = rows.to_h { |f| [f['route'], f] }
+   flagged = rows.select { |f| %w[likely possible].include?(f['verdict']) }.sort_by { |f| -f['score'].to_i } %>
+<div class="card live-head">
+  <div class="live-top">
+    <span class="live-dot" aria-hidden="true"></span><b>Live results</b>
+    <span class="muted"><%= done %> of <%= total %> routes reviewed<% if flagged.any? %> · <span class="flag-count"><%= flagged.size %> flagged so far</span><% end %></span>
+  </div>
+  <div class="live-bar"><span style="width:<%= total.positive? ? (100.0 * done / total).round : 0 %>%"></span></div>
+</div>
+<% if flagged.any? %>
+  <h2>Flagged so far <span class="count">· <%= flagged.size %></span></h2>
+  <% flagged.each do |f| %><%= erb :finding_card, layout: false, locals: { f: f } %><% end %>
+<% elsif done.positive? %>
+  <div class="notice good">Nothing flagged in the first <%= done %> routes so far.</div>
+<% end %>
+<div class="card">
+  <div class="table-wrap"><table class="live-routes">
+    <tr><th>Route</th><th>Handler</th><th>Result</th></tr>
+    <% all = s['routes'] || []
+       ordered = all.select { |r| by_route[r['route']] }.sort_by { |r| -by_route[r['route']]['score'].to_i } +
+                 all.reject { |r| by_route[r['route']] } # reviewed first, highest score on top; then the rest %>
+    <% ordered.each do |r| f = by_route[r['route']] %>
+    <tr data-k="row|<%= h r['route'] %>|<%= f ? h(f['verdict']) : 'pending' %>">
+      <td class="mono"><%= h r['route'] %></td>
+      <td class="muted"><%= h r['handler'] %></td>
+      <td class="nowrap"><% if f %><span class="verdict <%= h f['verdict'] %>"><%= h f['verdict'] %> · <%= h f['score'] %></span>
+          <% else %><span class="pending">Reviewing…</span><% end %></td>
+    </tr>
+    <% end %>
+  </table></div>
+</div>

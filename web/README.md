@@ -154,6 +154,7 @@ Changes can take a few minutes to apply. A `redirect_uri_mismatch` error from Go
 | `ALLOWED_DOMAINS` | Only Google accounts with these email domains may sign in, comma-separated | any |
 | `ALLOWED_EMAILS` | Only these Google accounts may sign in, comma-separated (combined with `ALLOWED_DOMAINS`) | any |
 | `ADMIN_EMAILS` | These accounts see every user's scans, comma-separated | `sella.rafaeli@gmail.com` |
+| `ANALYZE_BATCH`, `ANALYZE_JOBS` | Routes per LLM call, and LLM calls in parallel, for the analysis. Results appear on the scan page as each call finishes (`analyze_bola.rb --partial`), so smaller batches show results sooner. | `5`, `4` |
 | `MAX_REPO_MB` | Refuse repos bigger than this after cloning | `500` |
 | `MAX_QUEUE` | Refuse new scans when this many are waiting | `10` |
 

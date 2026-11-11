@@ -72,7 +72,7 @@ def batch_prompt(items)
 end
 
 # ── 1. LOAD ──
-opts = { in: "trace.json", out: "bola_report", batch: 10, jobs: 3, max_chars: 150_000, limit: nil, dry: false }
+opts = { in: "trace.json", out: "bola_report", batch: 10, jobs: 3, max_chars: 150_000, limit: nil, dry: false, partial: nil }
 OptionParser.new do |o|
   o.banner = "usage: ruby analyze_bola.rb [trace.json] [options]"
   o.on("--out NAME", "report base name (default bola_report -> .json and .md)") { |v| opts[:out] = v.sub(/\.(json|md)\z/, "") }
@@ -81,6 +81,7 @@ OptionParser.new do |o|
   o.on("--max-chars N", Integer, "max code characters per call (default 150000)") { |v| opts[:max_chars] = v }
   o.on("--limit N", Integer, "only analyze the first N routes (cheap test run)") { |v| opts[:limit] = v }
   o.on("--dry-run", "build the batches and print the first prompt; no LLM calls") { opts[:dry] = true }
+  o.on("--partial FILE", "append each batch's results to FILE as JSON lines as soon as the batch finishes") { |v| opts[:partial] = v }
 end.parse!
 opts[:in] = ARGV[0] if ARGV[0]
 
@@ -150,6 +151,8 @@ workers = Array.new([opts[:jobs], batches.size].min) do
       results[i] = res
       flagged = res.count { |r| %w[likely possible].include?(r["verdict"]) }
       mutex.synchronize do
+        # one JSON line per route, written whole under the lock, so a reader never sees half a batch
+        File.open(opts[:partial], "a") { |f| res.each { |r| f.puts(JSON.generate(r)) } } if opts[:partial]
         log(:ask, "batch #{i + 1}/#{batches.size}: #{b.size} routes, #{flagged} flagged (#{(Time.now - t0).round}s)")
         res.sort_by { |r| -r["score"].to_i }.each do |r|
           log(:verdict, format("%3s  %-8s  %s", r["score"] || "-", r["verdict"], r["route"]))
