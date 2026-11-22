@@ -4,16 +4,18 @@ Variablee Code is the web app for `route_tracer.rb`. Anyone can paste a public r
 
 | Page | What it shows |
 |---|---|
-| `/` | The scan form, benchmark numbers, links, and your 15 latest scans |
+| `/` | Signed out: the landing page (pitch, benchmark numbers, sign-in buttons). Signed in: the scan form, benchmark numbers, links, and your 15 latest scans |
+| `/login` | The sign-in page: one card with the sign-in buttons. Every page that needs a sign-in sends signed-out visitors here, with a "Please sign in to continue" banner naming what they clicked, and back to it once they sign in |
 | `/scans` | Your scans with status, route count and results, 50 per page (admins: everyone's, with who ran each) |
 | `/scans/<id>` | One scan: progress, the **Run the analysis** button, flagged routes with fixes, all traced routes, call trees, a timeline of what happened, and the log |
 | `/scans/<id>.json` | One scan's full document |
 | `/whitepaper`, `/whitepaper.pdf` | The white paper (`public/whitepaper.html`; rebuild the PDF with `web/build_whitepaper_pdf`) |
 | `/blog` | Research index: the white paper and blog posts (`POSTS` in `web.rb`) |
-| `/privacy`, `/tos` | Privacy Policy and Terms of Service (`LEGAL` in `web.rb`). All four pages open without signing in. |
+| `/privacy`, `/tos` | Privacy Policy and Terms of Service (`LEGAL` in `web.rb`). Like the white paper and blog, they need a sign-in. |
+| `/go/github`, `/go/variablee`, `/go/blog-post` | Every link to another site goes through here (`EXTERNAL_LINKS` in `web.rb`): it needs a sign-in, records the click as a visit, then sends you on. |
 | `#contact` on every page, `POST /contact` | "Contact us" form (linked from the top bar). Messages are saved in the `contacts` collection and emailed to `NOTIFY_EMAIL` with Reply-To set to the sender. A hidden field catches bots, and one IP can send at most 5 messages an hour. Works without signing in. |
 
-The sign-in page also shows **Sign in with Microsoft** and **Sign in with SSO** buttons. They are not wired up yet: clicking one shows a "coming soon, use Google" note.
+The landing and sign-in pages also show **Sign in with Microsoft** and **Sign in with SSO** buttons. They are not wired up yet: clicking one shows a "coming soon, use Google" note.
 
 Signed-in users see and open only their own scans; someone else's scan is a 404. Admins (`ADMIN_EMAILS`) see everyone's. With sign-in off, everyone sees every scan.
 
@@ -116,7 +118,7 @@ heroku certs:auto:enable -a my-app
 
 ## Sign in with Google
 
-With `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` set, every page needs a Google sign-in. Each scan then records who started it and who ran its analysis; both show on the scan page, in the scans tables, in the event timeline and in the emails. Every person who signs in gets a document in the `users` collection (name, email, first and last sign-in, number of sign-ins). Without the two settings the site is open to anyone, scans are "anonymous", and the server log says so at startup.
+With `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` set, every page needs a Google sign-in except the landing page (`/` while signed out), its contact form, the sign-in page (`/login`), the sign-in flow and the images in `public/img/`. The white paper, `/blog`, `/privacy`, `/tos` and links to other sites (GitHub, variablee.com, the blog post) need a sign-in too; a signed-out visitor who clicks one lands on `/login` with a "Please sign in to continue" banner, and goes on to the page they clicked after signing in. Signing out returns to the landing page. Other files in `public/`, like the white paper's HTML and PDF, need a sign-in too (`PUBLIC_PATHS` and `PUBLIC_PREFIXES` in `web.rb`). Each scan then records who started it and who ran its analysis; both show on the scan page, in the scans tables, in the event timeline and in the emails. Every person who signs in gets a document in the `users` collection (name, email, first and last sign-in, number of sign-ins). Without the two settings the site is open to anyone, scans are "anonymous", and the server log says so at startup.
 
 To limit who can get in, set `ALLOWED_DOMAINS` (like `variablee.com`) and/or `ALLOWED_EMAILS`. Leave both unset to allow any Google account.
 
@@ -154,7 +156,7 @@ Changes can take a few minutes to apply. A `redirect_uri_mismatch` error from Go
 | `ALLOWED_DOMAINS` | Only Google accounts with these email domains may sign in, comma-separated | any |
 | `ALLOWED_EMAILS` | Only these Google accounts may sign in, comma-separated (combined with `ALLOWED_DOMAINS`) | any |
 | `ADMIN_EMAILS` | These accounts see every user's scans, comma-separated | `sella.rafaeli@gmail.com` |
-| `VISIT_EMAILS` | `0` to stop the email for each page visit (visits are still recorded in the `visits` collection). Repeat views of the same page by the same visitor within `VISIT_EMAIL_QUIET` minutes, and bots, are never emailed. | on, `10` |
+| `VISIT_EMAILS` | `0` to stop the email for each page visit by a signed-in user (visits are still recorded in the `visits` collection; signed-out visits are never emailed). Repeat views of the same page by the same visitor within `VISIT_EMAIL_QUIET` minutes, and bots, are never emailed. | on, `10` |
 | `DAILY_SUMMARY`, `DAILY_SUMMARY_HOUR` | Daily email to `NOTIFY_EMAIL` with the last 24 hours of visits, new users, scans, results and contact messages, sent at this hour (UTC). `0` turns it off. Admins can preview it at `/admin/daily-summary` (add `?send=1` to send it now). On an eco dyno that sleeps, it's sent when the dyno wakes. | on, `6` |
 | `ANALYZE_BATCH`, `ANALYZE_JOBS` | Routes per LLM call, and LLM calls in parallel, for the analysis. Results appear on the scan page as each call finishes (`analyze_bola.rb --partial`), so smaller batches show results sooner. | `5`, `4` |
 | `MAX_REPO_MB` | Refuse repos bigger than this after cloning | `500` |
@@ -166,7 +168,7 @@ One document per scan in the `scans` collection: the repo URL and commit, status
 
 ## Emails
 
-With `POSTMARK_API_TOKEN` set, `NOTIFY_EMAIL` gets one email per action, each with a link to the scan:
+With `POSTMARK_API_TOKEN` set, `NOTIFY_EMAIL` gets one email per action on a scan started by a signed-in user, each with a link to the scan (scans with nobody signed in, which happen only with sign-in off, aren't emailed):
 
 - **Scan requested:** someone submitted a repo
 - **Trace done:** the route count and frameworks, and whether it's ready to analyze

@@ -105,12 +105,14 @@ def event(id, subject, details = "", send_email: true, by: nil)
 end
 
 # Send one email through Postmark's API in the background; a failure is only logged.
+# Only scans started by a signed-in user are emailed (anonymous scans exist only with sign-in off).
 def email(id, subject, details)
   return if ENV["POSTMARK_API_TOKEN"].to_s.empty?
   scan = SCANS.find(_id: id).projection(repo_url: 1, base_url: 1, requested_by: 1).first or return
+  return unless scan["requested_by"]
   name, = repo_name(scan["repo_url"])
   link = "#{scan['base_url']}/scans/#{id}"
-  owner = scan["requested_by"] ? "#{scan['requested_by']['name']} <#{scan['requested_by']['email']}>" : "anonymous"
+  owner = "#{scan['requested_by']['name']} <#{scan['requested_by']['email']}>"
   postmark_send("Variablee Code · #{name}: #{subject}",
                 [subject, details, "Repo: #{scan['repo_url']}", "Scan started by: #{owner}", "Scan: #{link}",
                  "— Variablee Code"].reject(&:empty?).join("\n\n"))
@@ -506,9 +508,17 @@ CONTACTS             = DB[:contacts] # messages sent through the contact form
 # Admins see every user's scans; everyone else sees only their own.
 ADMIN_EMAILS         = ENV.fetch("ADMIN_EMAILS", "sella.rafaeli@gmail.com").downcase.split(",").map(&:strip).reject(&:empty?)
 SCANS.indexes.create_one("requested_by.email" => 1, created_at: -1)
-PUBLIC_PATHS         = %w[/login /logout /auth/google /auth/google/callback /privacy /tos /terms /whitepaper /blog /__live /contact].freeze
-LINKS = { whitepaper: "/whitepaper", blog: "/blog", blog_post: "https://sellarafaeli.com/blog/ai_native_sast_for_idor_bola",
-          github: "https://github.com/sellarafaeli/ai_sast", variablee: "https://variablee.com" }.freeze
+# With sign-in on, only these open without it: the landing page ("/", which shows the scan form once signed in)
+# and its contact form, the sign-in page (/login) and the sign-in flow itself. Images under /img/ stay open too,
+# since the landing page shows them. Everything else (white paper, blog, Privacy Policy, Terms, links to other
+# sites) sends a signed-out visitor to /login.
+PUBLIC_PATHS         = %w[/ /login /logout /auth/google /auth/google/callback /__live /contact].freeze
+PUBLIC_PREFIXES      = %w[/img/].freeze
+# Links to other sites go through /go/<name>, which needs a sign-in like any page and records the click as a visit.
+EXTERNAL_LINKS = { "github" => "https://github.com/sellarafaeli/ai_sast", "variablee" => "https://variablee.com",
+                   "blog-post" => "https://sellarafaeli.com/blog/ai_native_sast_for_idor_bola" }.freeze
+LINKS = { whitepaper: "/whitepaper", blog: "/blog", blog_post: "/go/blog-post", github: "/go/github",
+          variablee: "/go/variablee" }.freeze
 if AUTH_ON
   warn "[auth] Google sign-in is ON#{ALLOWED_DOMAINS.any? || ALLOWED_EMAILS.any? ? " (only #{(ALLOWED_DOMAINS + ALLOWED_EMAILS).join(', ')})" : ''}"
 else
@@ -526,17 +536,29 @@ def email_allowed?(email)
   ALLOWED_EMAILS.include?(email) || ALLOWED_DOMAINS.include?(email.split("@").last)
 end
 
+# Sinatra normally serves public/ files before any filter runs, which would let /whitepaper.html and
+# /whitepaper.pdf skip sign-in. So files are served here instead, after the sign-in check.
+set :static, false
+
+# The path is decoded and its ".." resolved first, so /img/../whitepaper.pdf can't pass as an image.
+def public_path?(path)
+  path = Rack::Utils.clean_path_info(Rack::Utils.unescape_path(path))
+  PUBLIC_PATHS.include?(path) || PUBLIC_PREFIXES.any? { |pre| path.start_with?(pre) }
+end
+
 before do
-  next unless AUTH_ON
-  next if PUBLIC_PATHS.include?(request.path_info)
-  next if session[:user]
-  session[:return_to] = request.fullpath if request.get?
-  redirect to("/login")
+  if AUTH_ON && !session[:user] && !public_path?(request.path_info)
+    session[:return_to] = request.fullpath if request.get?
+    session[:login_required] = request.get? ? request.path_info : "" # the sign-in page says what they tried to open
+    redirect to("/login")
+  end
+  static! if request.get? || request.head? # a file in public/: send it and stop here
 end
 
 get "/login" do
   redirect to("/") if session[:user] || !AUTH_ON
   @error = params[:error]
+  @login_required = session.delete(:login_required) # shown once, right after a page sent them here
   @title = "Sign in"
   erb :login
 end
@@ -545,8 +567,19 @@ end
 %w[get post].each do |verb|
   send(verb, "/logout") do
     session.clear
-    redirect to(AUTH_ON ? "/login" : "/")
+    redirect to("/")
   end
+end
+
+# A link to another site (EXTERNAL_LINKS). The sign-in check above runs first; the click is recorded, then followed.
+get "/go/:name" do
+  url = EXTERNAL_LINKS[params[:name]] or halt(404, "No such link")
+  begin
+    record_visit
+  rescue => e
+    warn "[visit] #{e.class}: #{e.message}"
+  end
+  redirect url
 end
 
 # Privacy Policy and Terms of Service. Each section is [heading, text] or [heading, [bullet, ...]].
@@ -683,9 +716,9 @@ post "/contact" do
 end
 
 # ── page visits: recorded, and emailed to NOTIFY_EMAIL ──
-# Every HTML page served is saved in `visits`. One email per visit, except repeats of the same page by the
-# same visitor within VISIT_EMAIL_QUIET minutes (a running scan's page reloads itself every 3 seconds) and
-# obvious bots. VISIT_EMAILS=0 turns the emails off; visits are still recorded.
+# Every HTML page served is saved in `visits`. One email per visit by a signed-in user, except repeats of the
+# same page within VISIT_EMAIL_QUIET minutes (a running scan's page reloads itself every 3 seconds) and obvious
+# bots. Signed-out visits are recorded but never emailed. VISIT_EMAILS=0 turns the emails off.
 VISITS = DB[:visits]
 VISITS.indexes.create_one(created_at: -1)
 VISITS.indexes.create_one(visitor: 1, path: 1, created_at: -1)
@@ -713,13 +746,12 @@ helpers do
     now = Time.now.utc
     bot = ua.match?(BOT_UA)
     repeat = VISITS.find(visitor: visitor, path: path, created_at: { "$gt" => now - VISIT_EMAIL_QUIET * 60 }).limit(1).first
-    emailed = VISIT_EMAILS && !bot && !repeat
+    emailed = VISIT_EMAILS && user && !bot && !repeat # only signed-in visitors are emailed
     VISITS.insert_one(created_at: now, path: path, visitor: visitor, user_email: user&.dig("email"), user_name: user&.dig("name"),
                       ip: request.ip, user_agent: ua, referrer: request.referer.to_s[0, 300], bot: bot, emailed: emailed)
     return unless emailed
-    who = user ? "#{user['name']} <#{user['email']}>" : "Anonymous visitor (#{request.ip})"
-    postmark_send("Variablee Code · Visit: #{path} by #{user ? user['name'] : 'anonymous'}",
-                  ["#{who} opened #{request.base_url}#{path}",
+    postmark_send("Variablee Code · Visit: #{path} by #{user['name']}",
+                  ["#{user['name']} <#{user['email']}> opened #{request.base_url}#{path}",
                    "Time: #{now.strftime('%Y-%m-%d %H:%M:%S UTC')}",
                    "Came from: #{request.referer.to_s.empty? ? '(direct)' : request.referer}",
                    "Browser: #{ua.empty? ? '-' : ua}",
@@ -821,7 +853,7 @@ POSTS = [
     title: "Route-Sliced Context: Scalable LLM-Based Detection of Broken Object-Level Authorization in Large Codebases",
     by: "Variablee research team",
     summary: "The core algorithm behind Variablee Code: why BOLA is a route-local property, how we build a bounded context slice for every route across nine frameworks, and how it performs on 25 documented vulnerabilities (24 detected, one false positive on 28 known-safe routes)." },
-  { kind: "Blog", date: "November 9, 2026", url: "https://sellarafaeli.com/blog/ai_native_sast_for_idor_bola", external: true,
+  { kind: "Blog", date: "November 9, 2026", url: LINKS[:blog_post], external: true,
     title: "AI-native SAST for IDOR / BOLA",
     by: "Sella Rafaeli, Security Research Lead",
     summary: "Why AI code review runs out of context on large codebases, how narrowing it to one route at a time solves that, and how we benchmark the scanner on applications with known, published vulnerabilities." }
@@ -888,6 +920,8 @@ helpers do
 
   # The signed-in Google user ({ email, name, picture }), or nil when sign-in is off.
   def current_user = session[:user]
+  # For links to other sites: a new tab once signed in; signed out, the link leads to /login, so stay in this tab.
+  def new_tab = AUTH_ON && !current_user ? "" : 'target="_blank" rel="noopener"'
   def admin? = !AUTH_ON || ADMIN_EMAILS.include?(current_user&.dig("email").to_s) # sign-in off (local dev): everyone sees all
 
   # The Mongo filter for the scans this visitor may see.
@@ -934,6 +968,11 @@ helpers do
 end
 
 get "/" do
+  if AUTH_ON && !current_user # signed out: the landing page
+    @error = params[:error]
+    @title = "AI SAST for the Enterprise"
+    return erb(:landing)
+  end
   @scans = SCANS.find(visible_scans).sort(created_at: -1).limit(15).projection(log: 0, tree: 0, routes: 0, findings: 0, events: 0).to_a
   @error = params[:error]
   @analysis_off = analysis_off_reason
@@ -1200,6 +1239,19 @@ __END__
   .google-btn { display: inline-flex; align-items: center; gap: 12px; padding: 12px 22px; border-radius: 12px; background: #fff;
                 color: #1f1f1f; font-weight: 700; font-size: 16px; box-shadow: 0 6px 20px rgba(0,0,0,.18); transition: transform .15s; }
   .google-btn:hover { text-decoration: none; transform: translateY(-2px); }
+  /* the sign-in page (/login): one centered card */
+  .login-page { max-width: 480px; margin: 36px auto 24px; }
+  .login-page .login-card { max-width: none; margin: 22px 0 0; }
+  .login-page .login-card h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.2; }
+  .login-back { margin: 18px 0 0; text-align: center; }
+  .login-back a { color: #fff; opacity: .9; }
+  /* "Please sign in" banner, on the sign-in page after a signed-out visitor opened a page that needs sign-in */
+  .signin-required { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 0; padding: 14px 18px;
+                     border-radius: 14px; background: #fff; color: #19172b; box-shadow: 0 10px 30px rgba(0,0,0,.2); }
+  .signin-required svg { flex: none; color: #7c3aed; }
+  .signin-required p { flex: 1 1 260px; margin: 0; font-size: 15px; line-height: 1.45; }
+  .signin-required p b { display: block; font-size: 16px; }
+  .signin-required code { padding: 1px 6px; border-radius: 6px; background: #f1eefc; color: #19172b; word-break: break-all; }
   .by-user { white-space: nowrap; }
   .brand .logo { width: 34px; height: 34px; border-radius: 10px; background: rgba(255,255,255,.2); display: grid; place-items: center;
                  backdrop-filter: blur(6px); font-size: 18px; }
@@ -1339,7 +1391,7 @@ __END__
 <footer>
   <div class="foot-links">
     <a href="<%= LINKS[:whitepaper] %>">White paper</a> · <a href="<%= LINKS[:blog] %>">Blog</a> ·
-    <a href="<%= LINKS[:github] %>" target="_blank" rel="noopener">GitHub</a> · <a href="<%= LINKS[:variablee] %>" target="_blank" rel="noopener">variablee.com</a> ·
+    <a href="<%= LINKS[:github] %>" <%= new_tab %>>GitHub</a> · <a href="<%= LINKS[:variablee] %>" <%= new_tab %>>variablee.com</a> ·
     <a href="/privacy">Privacy</a> · <a href="/tos">Terms</a> · <a href="#contact">Contact</a>
   </div>
   © <%= Time.now.year %> Variablee · Frontier AI Security Lab. Variablee Code findings are a triage order for expert review, not proof.
@@ -1608,7 +1660,7 @@ __END__
   <nav class="nav" aria-label="Main">
     <a href="<%= LINKS[:whitepaper] %>">White paper</a>
     <a href="<%= LINKS[:blog] %>">Blog</a>
-    <a href="<%= LINKS[:github] %>" target="_blank" rel="noopener">GitHub</a>
+    <a href="<%= LINKS[:github] %>" <%= new_tab %>>GitHub</a>
     <a href="/privacy">Privacy</a>
     <a href="/tos">Terms</a>
     <a class="nav-cta" href="#contact">Contact us</a>
@@ -1669,6 +1721,58 @@ __END__
 <header class="hero">
   <div class="hero-inner">
     <%= erb :brand, layout: false %>
+    <div class="login-page">
+    <% if @login_required %>
+    <div class="signin-required" role="alert">
+      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      <p><b>Please sign in to continue.</b>
+        <% if @login_required.empty? %>Your session has ended. Sign in below and try again.
+        <% elsif @login_required == "/go/github" %>The GitHub link is for signed-in users. Sign in below and we'll take you straight there.
+        <% else %><% link = @login_required.start_with?("/go/") && EXTERNAL_LINKS[@login_required.delete_prefix("/go/")] %>
+        <code><%= h link ? link.sub(%r{\Ahttps?://}, "") : @login_required %></code> is for signed-in users. Sign in below and we'll take you straight there.<% end %></p>
+    </div>
+    <% end %>
+    <div class="login-card">
+      <h1>Sign in to Variablee Code</h1>
+      <p>Sign in to run scans and to read the white paper, the blog, our Privacy Policy and Terms, and the source on GitHub.</p>
+      <%= erb :sign_in_buttons, layout: false %>
+    </div>
+    <p class="login-back"><a href="/">← Back to the home page</a></p>
+    </div>
+  </div>
+</header>
+
+@@ sign_in_buttons
+<a class="google-btn" href="/auth/google">
+  <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+  Sign in with Google
+</a>
+<br/>
+<button type="button" class="google-btn" data-soon="Microsoft">
+  <svg width="18" height="18" viewBox="0 0 23 23" aria-hidden="true"><path fill="#f25022" d="M1 1h10v10H1z"/><path fill="#7fba00" d="M12 1h10v10H12z"/><path fill="#00a4ef" d="M1 12h10v10H1z"/><path fill="#ffb900" d="M12 12h10v10H12z"/></svg>
+  Sign in with Microsoft
+</button>
+<div class="or"><span>or</span></div>
+<button type="button" class="google-btn sso" data-soon="SSO">
+  <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+  Sign in with SSO <span class="muted-in">SAML · OIDC</span>
+</button>
+<p class="soon-note" role="status" hidden></p>
+<% if @error %><p class="error" style="margin:16px 0 0"><%= h @error %></p><% end %>
+<script>
+  document.querySelectorAll("[data-soon]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var n = document.querySelector(".soon-note");
+      n.textContent = "Sign-in with " + b.dataset.soon + " is coming soon. Use Google for now, or contact us at variablee.com to set up your organization.";
+      n.hidden = false;
+    });
+  });
+</script>
+
+@@ landing
+<header class="hero">
+  <div class="hero-inner">
+    <%= erb :brand, layout: false %>
     <div class="hero-top">
     <div class="hero-text">
     <div class="eyebrow">Next-Gen Code-aware Vulnerability Detection<br/> for Very Large Codebases</div>
@@ -1682,34 +1786,10 @@ __END__
     <div class="signin-row">
     <div class="login-card">
       <p><b>Try It On Your Repo.</b> Sign in to run your first scan in minutes.</p>
-      <a class="google-btn" href="/auth/google">
-        <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
-        Sign in with Google
-      </a>
-      <br/>
-      <button type="button" class="google-btn" data-soon="Microsoft">
-        <svg width="18" height="18" viewBox="0 0 23 23" aria-hidden="true"><path fill="#f25022" d="M1 1h10v10H1z"/><path fill="#7fba00" d="M12 1h10v10H12z"/><path fill="#00a4ef" d="M1 12h10v10H1z"/><path fill="#ffb900" d="M12 12h10v10H12z"/></svg>
-        Sign in with Microsoft
-      </button>
-      <div class="or"><span>or</span></div>
-      <button type="button" class="google-btn sso" data-soon="SSO">
-        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        Sign in with SSO <span class="muted-in">SAML · OIDC</span>
-      </button>
-      <p class="soon-note" role="status" hidden></p>
-      <% if @error %><p class="error" style="margin:16px 0 0"><%= h @error %></p><% end %>
+      <%= erb :sign_in_buttons, layout: false %>
     </div>
     <%= erb :badges, layout: false %>
     </div>
-    <script>
-      document.querySelectorAll("[data-soon]").forEach(function (b) {
-        b.addEventListener("click", function () {
-          var n = document.querySelector(".soon-note");
-          n.textContent = "Sign-in with " + b.dataset.soon + " is coming soon. Use Google for now, or contact us at variablee.com to set up your organization.";
-          n.hidden = false;
-        });
-      });
-    </script>
   </div>
 </header>
 <main>
@@ -1760,7 +1840,7 @@ __END__
     <div class="stat"><b>9</b><span>frameworks across Ruby, Python and JavaScript / TypeScript</span></div>
   </div>
   <p class="muted proof-note">Benchmark: OWASP RailsGoat, OWASP crAPI, dvws-node and aegra (CVE-2026-44504).
-    <a href="<%= LINKS[:github] %>#benchmarks-and-up-to-date-test-results" target="_blank" rel="noopener">See the full results →</a></p>
+    <a href="<%= LINKS[:github] %>#benchmarks-and-up-to-date-test-results" <%= new_tab %>>See the full results →</a></p>
 
   <div class="how">
     <div class="card"><div class="num">🧩</div><h3>1. Parse</h3><p>Indexes every method and class across Ruby, Python and JS / TS, and finds every route in Rails, Django, FastAPI, Express, NestJS and more.</p></div>
@@ -1851,7 +1931,7 @@ __END__
        alt="Illustrative scan output: three candidate BOLA findings, each with shared auth, the missing or unclear check, a nearby check, and a next step"></a>
   </div>
 
-  <a class="card author" href="<%= LINKS[:blog_post] %>" target="_blank" rel="noopener">
+  <a class="card author" href="<%= LINKS[:blog_post] %>" <%= new_tab %>>
     <img src="/img/blog/tux1.jpeg" width="800" height="800" loading="lazy" alt="Sella Rafaeli">
     <div>
       <div class="kicker">From the lab</div>
