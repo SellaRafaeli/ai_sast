@@ -134,6 +134,17 @@ def route_cost(c, route)
 end
 
 def money(x) = x.nil? ? "—" : x < 1 ? format("$%.4f", x) : format("$%.2f", x)
+# The scan log as HTML, one row per line: the text on the left (long lines wrap) and the line's time, which
+# append_log adds as "  [07:50:15 UTC]", pinned to the right edge of the box.
+def log_html(log)
+  log.to_s.chomp.split("\n", -1).map do |line|
+    text, ts = line.match(/\A(.*?)  \[(\d\d:\d\d:\d\d) UTC\]\z/)&.captures || [line, nil]
+    %(<span class="ln"><span class="tx">#{Rack::Utils.escape_html(text)}</span>) +
+      (ts ? %(<span class="ts" title="UTC">#{ts}</span>) : "") + "</span>"
+  end.join
+end
+
+def mmss(secs) = format("%02d:%05.2f", secs.to_f.div(60), secs.to_f % 60) # 0.61 -> "00:00.61", 75.3 -> "01:15.30"
 def per_million(p) = format("$%g", (p * 1_000_000).round(4)) # 1.25e-06 -> "$1.25" (per million tokens)
 
 # Cancelling: the cancel button flags the scan, and the job running for it stops at its next check.
@@ -1738,7 +1749,15 @@ __END__
   .act-pending { color: var(--amber); } .act-pending .dot { background: var(--amber); }
   @keyframes actblink { 50% { opacity: .25; } }
   .err { color: var(--red); font-size: 12px; } a.reused { font-size: 12px; }
-  .routes .model { font-size: 12.5px; } .routes .cost { font: 600 13px/1.2 "JetBrains Mono", ui-monospace, monospace; cursor: help; }
+  .routes .extra { font-size: 12.5px; line-height: 1.6; } .routes .extra .k { color: var(--muted); display: inline-block; min-width: 40px; }
+  /* the scan log: one row per line, long lines wrap, each line's time lined up on the right edge */
+  #log { white-space: normal; }
+  #log .ln { display: flex; align-items: baseline; gap: 18px; min-height: 1.5em; }
+  #log .ln:hover { background: rgba(124,58,237,.06); }
+  #log .tx { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  #log .ts { flex: none; color: var(--muted); opacity: .75; font-size: .9em; font-variant-numeric: tabular-nums; }
+  .routes .extra summary { font: 400 12.5px/1.4 "JetBrains Mono", ui-monospace, monospace; gap: 6px; }
+  .routes .extra details[open] > summary { margin-bottom: 4px; color: var(--muted); } .routes .cost { font: 600 13px/1.2 "JetBrains Mono", ui-monospace, monospace; cursor: help; }
 
   /* status pills and recent scans */
   .pill { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; background: var(--surface-2); color: var(--muted); }
@@ -1992,13 +2011,12 @@ __END__
     <% end %>
     <div class="table-wrap"><table class="routes">
       <tr><th>Route</th><th>Handler</th><th>Data access</th>
-          <th title="Seconds the tracer spent on this route: its call tree and code (indexing the repo, shared by all routes, isn't counted)">Trace time</th>
           <th title="The code the LLM reads for this route, from the trace">Context</th>
           <th title="Tokens of this route's code in the LLM prompt (estimated)">Context tokens</th>
           <th title="Tokens of the LLM's answer for this route (estimated)">Response tokens</th>
-          <th>Model</th>
           <th title="This route's share of its LLM call's cost: its context, its share of the shared prompt, and its share of the answer">Cost</th>
-          <th title="Sorted by score">Result</th><th data-nosort></th></tr>
+          <th title="Sorted by score">Result</th><th data-nosort></th>
+          <th title="Trace time (mm:ss: how long the tracer spent on this route; indexing the repo, shared by all routes, isn't counted) and the model that answered. Click a cell for more. Sorts by trace time.">Extra data</th></tr>
       <% routes.each_with_index do |r, i| f = by_route[r['route']]; l = f && f['llm']; job = jobs[i.to_s]
            c = f && latest[[f.dig('llm', 'scan') || s['_id'], r['route']]]; rc = c && route_cost(c, r['route']) %>
       <tr id="route-<%= i %>" data-i="<%= i %>">
@@ -2007,12 +2025,10 @@ __END__
         <td><%= h r['handler'] %><br><span class="muted"><%= h r['framework'] %><% if r['input'].any? %> · <%= h r['input'].join(', ') %><% end %>
           · <%= r['methods'] %> methods, <%= r['files'] %> files</span></td>
         <td class="mono"><% r['model_calls'].each do |m| %><%= h m %><br><% end %></td>
-        <td class="mono nowrap" data-v="<%= r['trace_seconds'] %>"><%= r['trace_seconds'] ? format('%.2fs', r['trace_seconds']) : '<span class="muted">—</span>' %></td>
         <td data-v="<%= r['chars'] if r['chars'].to_i.positive? %>"><% if r['chars'].to_i.positive? %><button type="button" class="tok" data-part="code" aria-expanded="false"><%= num r['chars'] %> chars</button>
             <% else %><span class="muted">—</span><% end %></td>
         <td data-v="<%= l && l['context_tokens'] %>"><% if l %><button type="button" class="tok" data-part="context" aria-expanded="false"><%= num l['context_tokens'] %></button><% else %><span class="muted">—</span><% end %></td>
         <td data-v="<%= l && l['response_tokens'] %>"><% if l %><button type="button" class="tok" data-part="response" aria-expanded="false"><%= num l['response_tokens'] %></button><% else %><span class="muted">—</span><% end %></td>
-        <td class="nowrap"><% if c %><span class="mono model" title="<%= h c['model'] %>"><%= h Pricing.split(c['model'])[1] %></span><% else %><span class="muted">—</span><% end %></td>
         <td class="nowrap" data-v="<%= rc && rc['total'].round(8) %>"><% if rc %>
             <span class="cost<%= ' muted' if f['reused_from'] %>" title="<%= h [
               "#{num rc['context_tokens']} context + #{num rc['shared_tokens']} shared prompt tokens#{rc['cached_tokens'].positive? ? " (#{num rc['cached_tokens']} cached)" : ''} at #{per_million rc['price']['input']}/M = #{money rc['input_cost']}",
@@ -2035,8 +2051,18 @@ __END__
           <form class="inline" method="post" action="/scans/<%= h s['_id'] %>/routes/<%= i %>/run">
             <button class="run-btn" type="submit" <%= 'disabled' if job %>><%= f ? 'Run again' : 'Run' %></button></form>
         <% end %></td>
+        <td class="nowrap extra" data-v="<%= r['trace_seconds'] %>">
+          <% ts = r['trace_seconds'] && mmss(r['trace_seconds']); model = c && Pricing.split(c['model'])[1] %>
+          <details><summary><%= [ts || (model ? '—' : nil), model].compact.join(', ').then { |x| x.empty? ? '—' : h(x) } %></summary>
+            <div><span class="k">trace</span> <% if ts %><span class="mono"><%= ts %></span> <span class="muted">(<%= format('%.3fs', r['trace_seconds']) %>)</span><%
+                 else %><span class="muted" title="This scan was traced before trace times were recorded. A new scan has them.">not timed</span><% end %></div>
+            <div><span class="k">model</span> <% if c %><span class="mono"><%= h c['model'] %></span><% else %><span class="muted">not analyzed yet</span><% end %></div>
+            <% if c && c['seconds'] %><div><span class="k">LLM</span> <span class="mono"><%= mmss(c['seconds']) %></span>
+              <span class="muted">(the whole call<%= c['routes'].to_a.size > 1 ? " of #{c['routes'].size} routes" : '' %>)</span></div><% end %>
+            <% if f && f['analyzed_at'] %><div><span class="k">at</span> <%= when_s f['analyzed_at'] %></div><% end %>
+          </details></td>
       </tr>
-      <tr class="llm-row" hidden><td colspan="11"><div class="llm-box"></div></td></tr>
+      <tr class="llm-row" hidden><td colspan="10"><div class="llm-box"></div></td></tr>
       <% end %>
     </table></div>
     <p class="muted fine-note">Click a count to see the text. <b>Context</b> is the code the LLM reads for the route, kept from the trace.
@@ -2060,7 +2086,7 @@ __END__
   <% end %>
 
   <div class="card"><details <%= 'open' if @active || s['status'] == 'failed' %>><summary>Log</summary>
-    <pre id="log"><%= h s['log'] %></pre></details></div>
+    <pre id="log"><%= log_html(s['log']) %></pre></details></div>
 </main>
 <% if @live %>
 <script>
