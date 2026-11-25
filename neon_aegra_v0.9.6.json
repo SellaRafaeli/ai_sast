@@ -1,0 +1,957 @@
+{
+  "repo": "https://github.com/aegra/aegra/tree/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd",
+  "model": "gemini-4-neon",
+  "thinking": "high",
+  "at": "2026-11-25T10:20:54Z",
+  "turns": 4,
+  "forced_stop": false,
+  "usage": {
+    "input": 280354,
+    "tool_use_input": 0,
+    "cached": 279344,
+    "output": 25148,
+    "thoughts": 21575,
+    "cost_estimate": 0.7457
+  },
+  "framework": "FastAPI (Starlette) + SQLAlchemy Async ORM + LangGraph (AsyncPostgresSaver / AsyncPostgresStore)",
+  "summary": "Aegra enforces authentication via FastAPI router-level `require_auth` dependencies and isolates resources primarily by filtering SQLAlchemy queries with `user_id == user.identity` (plus `user_id == 'system'` for read-only assistants) and prefixing store namespaces with `['users', user.identity]`, alongside optional `@auth.on.*` hooks that allow by default. However, eight high-severity BOLA vulnerabilities break multi-tenant isolation across three root causes: (1) `services/run_preparation.py:_prepare_run` never verifies ownership of either the target `ThreadORM` or the referenced `AssistantORM` when starting runs on `POST /threads/{thread_id}/runs`, `/runs/stream`, `/runs/wait`, and stateless `/runs*`, allowing cross-user thread state read/mutation and private assistant execution/config disclosure; (2) `services/langgraph_service.py:create_run_config` and `inject_user_context` use `.setdefault()` and merge client-supplied `checkpoint` dicts into `config['configurable']`, allowing callers on both threaded and stateless run endpoints to override `thread_id`, `user_id`, and `langgraph_auth_user`; and (3) `POST /threads/{thread_id}/state` and `POST /threads/{thread_id}/history` merge an arbitrary `request.checkpoint` dict into `config['configurable']` after the `ThreadORM` ownership check, enabling callers who own any thread to read or mutate another user's LangGraph checkpoints.",
+  "routes": [
+    {
+      "id": "R37",
+      "method": "POST",
+      "path": "/threads/{thread_id}/runs/wait",
+      "handler": "libs/aegra-api/src/aegra_api/api/runs.py:275 wait_for_run",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/runs.py:275 wait_for_run",
+        "libs/aegra-api/src/aegra_api/services/run_preparation.py:147 _prepare_run",
+        "libs/aegra-api/src/aegra_api/services/run_executor.py:42 execute_run",
+        "libs/aegra-api/src/aegra_api/services/langgraph_service.py:568 create_run_config",
+        "libs/aegra-api/src/aegra_api/services/run_waiters.py:48 heartbeat_wait_body"
+      ],
+      "object": "path.thread_id (Thread), body.assistant_id (Assistant), and body.config.configurable / body.checkpoint (thread_id, user_id, langgraph_auth_user)",
+      "data_access": "SELECT/UPDATE ThreadORM WHERE thread_id = ? (unscoped); SELECT AssistantORM WHERE assistant_id = ? (unscoped); INSERT RunORM; waits and returns final graph output on victim thread",
+      "auth_checks": "require_auth router dependency only; NO handle_event call; NO user_id check on ThreadORM or AssistantORM; client config/checkpoint overrides thread_id/user_id",
+      "verdict": "likely",
+      "score": 100,
+      "evidence": "libs/aegra-api/src/aegra_api/api/runs.py:275-307; libs/aegra-api/src/aegra_api/services/run_preparation.py:34,112-144,186-205; libs/aegra-api/src/aegra_api/services/langgraph_service.py:541-550,582-615",
+      "reason": "Calls _prepare_run directly without invoking handle_event or checking ownership of ThreadORM or AssistantORM, allowing an attacker to mutate and execute on another user's thread (receiving its final state output directly), invoke another user's private assistant, or override thread_id/user_id/langgraph_auth_user via config.configurable or checkpoint.",
+      "fix": "Invoke handle_event('threads', 'create_run'), enforce ThreadORM.user_id == user.identity and AssistantORM.user_id IN (user.identity, 'system') in _prepare_run, and prevent client config/checkpoint from overriding thread_id, user_id, or langgraph_auth_user."
+    },
+    {
+      "id": "R32",
+      "method": "POST",
+      "path": "/threads/{thread_id}/runs/stream",
+      "handler": "libs/aegra-api/src/aegra_api/api/runs.py:76 create_and_stream_run",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/runs.py:76 create_and_stream_run",
+        "libs/aegra-api/src/aegra_api/services/run_preparation.py:147 _prepare_run",
+        "libs/aegra-api/src/aegra_api/services/run_executor.py:42 execute_run",
+        "libs/aegra-api/src/aegra_api/services/langgraph_service.py:568 create_run_config",
+        "libs/aegra-api/src/aegra_api/services/streaming_service.py:85 stream_run_execution"
+      ],
+      "object": "path.thread_id (Thread), body.assistant_id (Assistant), and body.config.configurable / body.checkpoint (thread_id, user_id, langgraph_auth_user)",
+      "data_access": "SELECT/UPDATE ThreadORM WHERE thread_id = ? (unscoped); SELECT AssistantORM WHERE assistant_id = ? (unscoped); INSERT RunORM; SSE stream of graph execution on victim thread",
+      "auth_checks": "require_auth router dependency only; NO handle_event call; NO user_id check on ThreadORM or AssistantORM; client config/checkpoint overrides thread_id/user_id",
+      "verdict": "likely",
+      "score": 100,
+      "evidence": "libs/aegra-api/src/aegra_api/api/runs.py:76-112; libs/aegra-api/src/aegra_api/services/run_preparation.py:34,112-144,186-205; libs/aegra-api/src/aegra_api/services/langgraph_service.py:541-550,582-615",
+      "reason": "Calls _prepare_run directly without even invoking handle_event, inheriting all three BOLA flaws: unscoped ThreadORM read/update and graph execution against another user's thread (streaming the victim's checkpoint state/messages directly back via SSE), unscoped AssistantORM lookup allowing execution of another user's private assistant, and client-controlled override of thread_id/user_id/langgraph_auth_user in create_run_config.",
+      "fix": "Invoke handle_event('threads', 'create_run'), verify ThreadORM.user_id == user.identity and AssistantORM.user_id IN (user.identity, 'system') inside _prepare_run, and force server-authoritative thread_id/user_id/langgraph_auth_user in create_run_config and inject_user_context."
+    },
+    {
+      "id": "R31",
+      "method": "POST",
+      "path": "/threads/{thread_id}/runs",
+      "handler": "libs/aegra-api/src/aegra_api/api/runs.py:38 create_run",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/runs.py:38 create_run",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "libs/aegra-api/src/aegra_api/services/run_preparation.py:147 _prepare_run",
+        "libs/aegra-api/src/aegra_api/services/run_preparation.py:30 _validate_resume_command",
+        "libs/aegra-api/src/aegra_api/services/run_preparation.py:94 update_thread_metadata",
+        "libs/aegra-api/src/aegra_api/services/run_status.py:50 set_thread_status",
+        "libs/aegra-api/src/aegra_api/services/run_executor.py:42 execute_run",
+        "libs/aegra-api/src/aegra_api/services/langgraph_service.py:568 create_run_config"
+      ],
+      "object": "path.thread_id (Thread), body.assistant_id (Assistant), and body.config.configurable / body.checkpoint (thread_id, user_id, langgraph_auth_user)",
+      "data_access": "SELECT/UPDATE ThreadORM WHERE thread_id = ? (unscoped); SELECT AssistantORM WHERE assistant_id = ? (unscoped); INSERT RunORM with user_id = user.identity; graph execution on checkpointer",
+      "auth_checks": "require_auth router dependency; handle_event('threads', 'create_run') allows by default; NO user_id check on ThreadORM or AssistantORM; client config/checkpoint overrides thread_id/user_id",
+      "verdict": "likely",
+      "score": 98,
+      "evidence": "libs/aegra-api/src/aegra_api/services/run_preparation.py:34,112-144,186-205; libs/aegra-api/src/aegra_api/services/langgraph_service.py:541-550,582-615",
+      "reason": "_prepare_run does not verify ThreadORM.user_id == user.identity in _validate_resume_command, update_thread_metadata, or set_thread_status, allowing an attacker to modify another user's thread, execute a graph against the victim's checkpoint state, and retrieve output via the newly created RunORM owned by the attacker. It also queries AssistantORM without checking user_id, leaking another user's private assistant config/context in the Run response, and create_run_config/inject_user_context allow client config.configurable and checkpoint to override thread_id, user_id, and langgraph_auth_user.",
+      "fix": "In _prepare_run, reject requests with 404/403 if an existing ThreadORM has user_id != user.identity, scope AssistantORM lookup to user_id IN (user.identity, 'system'), and overwrite (not setdefault) thread_id, run_id, user_id, and langgraph_auth_user in create_run_config/inject_user_context after sanitizing checkpoint fields."
+    },
+    {
+      "id": "R24",
+      "method": "POST",
+      "path": "/threads/{thread_id}/state",
+      "handler": "libs/aegra-api/src/aegra_api/api/threads.py:372 update_thread_state",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/threads.py:372 update_thread_state",
+        "SELECT ThreadORM WHERE thread_id = ? AND user_id = user.identity",
+        "libs/aegra-api/src/aegra_api/services/langgraph_service.py:555 create_thread_config",
+        "config['configurable'].update(request.checkpoint)",
+        "agent.aupdate_state(config, update_values)"
+      ],
+      "object": "path.thread_id AND body.checkpoint dict (can contain thread_id, user_id, langgraph_auth_user) targeting LangGraph checkpointer state",
+      "data_access": "AsyncPostgresSaver checkpoint write via agent.aupdate_state(config, update_values, as_node=...)",
+      "auth_checks": "require_auth router dependency; ThreadORM.user_id == user.identity checked ONLY on path.thread_id, then bypassed by merging user-controlled request.checkpoint into config['configurable']; omits handle_event",
+      "verdict": "likely",
+      "score": 95,
+      "evidence": "libs/aegra-api/src/aegra_api/api/threads.py:394-451; libs/aegra-api/src/aegra_api/models/threads.py:130-134",
+      "reason": "After verifying ownership of the URL path thread_id, the handler merges the unrestricted dict request.checkpoint directly into config['configurable'] via `.update(request.checkpoint)`. Any authenticated user who owns a thread with a graph_id can pass another user's thread_id inside request.checkpoint to overwrite config['configurable']['thread_id'] (and user_id/langgraph_auth_user) and mutate the victim's LangGraph checkpoint state.",
+      "fix": "Only copy allowlisted checkpoint fields (checkpoint_id and checkpoint_ns) from request.checkpoint into config['configurable'], and always re-assert config['configurable']['thread_id'] = thread_id and server-derived user context afterward."
+    },
+    {
+      "id": "R41",
+      "method": "POST",
+      "path": "/runs/wait",
+      "handler": "libs/aegra-api/src/aegra_api/api/stateless_runs.py:101 stateless_wait_for_run",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/stateless_runs.py:101 stateless_wait_for_run",
+        "libs/aegra-api/src/aegra_api/api/runs.py:275 wait_for_run",
+        "libs/aegra-api/src/aegra_api/services/run_preparation.py:147 _prepare_run",
+        "libs/aegra-api/src/aegra_api/services/run_executor.py:42 execute_run",
+        "libs/aegra-api/src/aegra_api/services/langgraph_service.py:568 create_run_config"
+      ],
+      "object": "body.assistant_id (Assistant) and body.config.configurable / body.checkpoint (thread_id, user_id, langgraph_auth_user)",
+      "data_access": "SELECT AssistantORM WHERE assistant_id = ? (unscoped); AsyncPostgresSaver checkpoint read/write using client-overridden thread_id",
+      "auth_checks": "require_auth router dependency only; NO user_id check on AssistantORM; client config/checkpoint overrides ephemeral thread_id and user_id/langgraph_auth_user",
+      "verdict": "likely",
+      "score": 95,
+      "evidence": "libs/aegra-api/src/aegra_api/api/stateless_runs.py:101-116; libs/aegra-api/src/aegra_api/services/run_preparation.py:186-196; libs/aegra-api/src/aegra_api/services/langgraph_service.py:541-550,582-615",
+      "reason": "Delegates to wait_for_run/_prepare_run, allowing any authenticated caller to execute another user's private assistant via body.assistant_id without an ownership check. Furthermore, despite generating an ephemeral thread_id, create_run_config preserves client-supplied config['configurable']['thread_id'] (and overwrites it from request.checkpoint) and inject_user_context preserves client-supplied user_id/langgraph_auth_user, allowing cross-user checkpoint access and identity spoofing.",
+      "fix": "Scope AssistantORM lookup in _prepare_run to user_id IN (user.identity, 'system'), and unconditionally assign server-derived thread_id, run_id, user_id, and langgraph_auth_user in create_run_config and inject_user_context."
+    },
+    {
+      "id": "R27",
+      "method": "POST",
+      "path": "/threads/{thread_id}/history",
+      "handler": "libs/aegra-api/src/aegra_api/api/threads.py:601 get_thread_history_post",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/threads.py:601 get_thread_history_post",
+        "SELECT ThreadORM WHERE thread_id = ? AND user_id = user.identity",
+        "libs/aegra-api/src/aegra_api/services/langgraph_service.py:555 create_thread_config",
+        "config['configurable'].update(cfg_cp)",
+        "agent.aget_state_history(config, ...)"
+      ],
+      "object": "path.thread_id AND body.checkpoint dict (can contain thread_id, user_id, langgraph_auth_user) targeting LangGraph checkpoint history",
+      "data_access": "AsyncPostgresSaver checkpoint history read via agent.aget_state_history(config, ...)",
+      "auth_checks": "require_auth router dependency; ThreadORM.user_id == user.identity checked ONLY on path.thread_id, then bypassed by merging user-controlled request.checkpoint into config['configurable']; omits handle_event",
+      "verdict": "likely",
+      "score": 95,
+      "evidence": "libs/aegra-api/src/aegra_api/api/threads.py:622-676; libs/aegra-api/src/aegra_api/models/threads.py:148-156",
+      "reason": "After checking ownership of path.thread_id, the handler merges the unrestricted dict request.checkpoint into config['configurable'] via `.update(cfg_cp)`. A caller owning any thread with a graph_id can supply another user's thread_id in request.checkpoint to overwrite config['configurable']['thread_id'] and retrieve the victim's full checkpoint state history from AsyncPostgresSaver.",
+      "fix": "Restrict request.checkpoint merging to checkpoint_id and checkpoint_ns only, and enforce config['configurable']['thread_id'] = thread_id (and do not allow request.before to override thread_id) before calling aget_state_history."
+    },
+    {
+      "id": "R42",
+      "method": "POST",
+      "path": "/runs/stream",
+      "handler": "libs/aegra-api/src/aegra_api/api/stateless_runs.py:165 stateless_stream_run",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/stateless_runs.py:165 stateless_stream_run",
+        "libs/aegra-api/src/aegra_api/api/runs.py:76 create_and_stream_run",
+        "libs/aegra-api/src/aegra_api/services/run_preparation.py:147 _prepare_run",
+        "libs/aegra-api/src/aegra_api/services/run_executor.py:42 execute_run",
+        "libs/aegra-api/src/aegra_api/services/langgraph_service.py:568 create_run_config"
+      ],
+      "object": "body.assistant_id (Assistant) and body.config.configurable / body.checkpoint (thread_id, user_id, langgraph_auth_user)",
+      "data_access": "SELECT AssistantORM WHERE assistant_id = ? (unscoped); AsyncPostgresSaver checkpoint read/write and SSE stream using client-overridden thread_id",
+      "auth_checks": "require_auth router dependency only; NO user_id check on AssistantORM; client config/checkpoint overrides ephemeral thread_id and user_id/langgraph_auth_user",
+      "verdict": "likely",
+      "score": 95,
+      "evidence": "libs/aegra-api/src/aegra_api/api/stateless_runs.py:165-182; libs/aegra-api/src/aegra_api/services/run_preparation.py:186-196; libs/aegra-api/src/aegra_api/services/langgraph_service.py:541-550,582-615",
+      "reason": "Delegates to create_and_stream_run/_prepare_run, allowing execution of another user's private assistant via unscoped AssistantORM lookup, and allowing client-supplied config.configurable.thread_id or checkpoint.thread_id to override the ephemeral thread_id and stream/mutate another user's LangGraph thread state.",
+      "fix": "Scope AssistantORM lookup in _prepare_run to user_id IN (user.identity, 'system'), and unconditionally assign server-derived thread_id, run_id, user_id, and langgraph_auth_user in create_run_config and inject_user_context."
+    },
+    {
+      "id": "R43",
+      "method": "POST",
+      "path": "/runs",
+      "handler": "libs/aegra-api/src/aegra_api/api/stateless_runs.py:220 stateless_create_run",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/stateless_runs.py:220 stateless_create_run",
+        "libs/aegra-api/src/aegra_api/api/runs.py:38 create_run",
+        "libs/aegra-api/src/aegra_api/services/run_preparation.py:147 _prepare_run",
+        "libs/aegra-api/src/aegra_api/services/run_executor.py:42 execute_run",
+        "libs/aegra-api/src/aegra_api/services/langgraph_service.py:568 create_run_config"
+      ],
+      "object": "body.assistant_id (Assistant) and body.config.configurable / body.checkpoint (thread_id, user_id, langgraph_auth_user)",
+      "data_access": "SELECT AssistantORM WHERE assistant_id = ? (unscoped); returns merged assistant config/context in Run response; executes on client-overridden thread_id",
+      "auth_checks": "require_auth router dependency; handle_event('threads', 'create_run') allows by default; NO user_id check on AssistantORM; client config/checkpoint overrides ephemeral thread_id and user_id/langgraph_auth_user",
+      "verdict": "likely",
+      "score": 95,
+      "evidence": "libs/aegra-api/src/aegra_api/api/stateless_runs.py:220-238; libs/aegra-api/src/aegra_api/services/run_preparation.py:186-254; libs/aegra-api/src/aegra_api/services/langgraph_service.py:541-550,582-615",
+      "reason": "Delegates to create_run/_prepare_run, enabling an attacker to reference any user's private assistant_id and immediately read its merged config and context in the returned Run JSON, as well as override the ephemeral thread_id and user_id/langgraph_auth_user via config.configurable or checkpoint.",
+      "fix": "Scope AssistantORM lookup in _prepare_run to user_id IN (user.identity, 'system'), and unconditionally assign server-derived thread_id, run_id, user_id, and langgraph_auth_user in create_run_config and inject_user_context."
+    },
+    {
+      "id": "R14",
+      "method": "POST",
+      "path": "/assistants/{assistant_id}/latest",
+      "handler": "libs/aegra-api/src/aegra_api/api/assistants.py:202 set_assistant_latest",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/assistants.py:202 set_assistant_latest",
+        "libs/aegra-api/src/aegra_api/services/assistant_service.py:354 set_assistant_latest"
+      ],
+      "object": "path.assistant_id and body.version selecting an Assistant and AssistantVersion",
+      "data_access": "SELECT/UPDATE AssistantORM WHERE assistant_id = ? AND user_id = user_identity; SELECT AssistantVersionORM WHERE assistant_id = ? AND version = ?",
+      "auth_checks": "require_auth router dependency; DB SELECT and UPDATE enforce AssistantORM.user_id == user_identity (note: does not invoke handle_event)",
+      "verdict": "unlikely",
+      "score": 15,
+      "evidence": "libs/aegra-api/src/aegra_api/api/assistants.py:202-215; libs/aegra-api/src/aegra_api/services/assistant_service.py:354-391",
+      "reason": "Ownership is enforced at the database layer via AssistantORM.user_id == user_identity before accessing versions or updating; minor gap is omission of the @auth.on handle_event hook present on sibling assistant routes.",
+      "fix": ""
+    },
+    {
+      "id": "R15",
+      "method": "POST",
+      "path": "/assistants/{assistant_id}/versions",
+      "handler": "libs/aegra-api/src/aegra_api/api/assistants.py:221 list_assistant_versions",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/assistants.py:221 list_assistant_versions",
+        "libs/aegra-api/src/aegra_api/services/assistant_service.py:393 list_assistant_versions"
+      ],
+      "object": "path.assistant_id selecting an Assistant's versions",
+      "data_access": "SELECT AssistantORM WHERE assistant_id = ? AND (user_id = user_identity OR user_id = 'system'); SELECT AssistantVersionORM WHERE assistant_id = ?",
+      "auth_checks": "require_auth router dependency; DB query scopes parent AssistantORM to user_identity or 'system' (does not invoke handle_event)",
+      "verdict": "unlikely",
+      "score": 15,
+      "evidence": "libs/aegra-api/src/aegra_api/services/assistant_service.py:393-428",
+      "reason": "Verifies the parent AssistantORM belongs to user_identity or 'system' before listing its AssistantVersionORM rows; minor gap is omitting handle_event.",
+      "fix": ""
+    },
+    {
+      "id": "R16",
+      "method": "GET",
+      "path": "/assistants/{assistant_id}/schemas",
+      "handler": "libs/aegra-api/src/aegra_api/api/assistants.py:239 get_assistant_schemas",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/assistants.py:239 get_assistant_schemas",
+        "libs/aegra-api/src/aegra_api/services/assistant_service.py:430 get_assistant_schemas",
+        "libs/aegra-api/src/aegra_api/services/langgraph_service.py:349 get_graph_for_validation"
+      ],
+      "object": "path.assistant_id selecting an Assistant's graph schemas",
+      "data_access": "SELECT AssistantORM WHERE assistant_id = ? AND (user_id = user.identity OR user_id = 'system')",
+      "auth_checks": "require_auth router dependency; DB query scopes AssistantORM to user.identity or 'system' (does not invoke handle_event)",
+      "verdict": "unlikely",
+      "score": 15,
+      "evidence": "libs/aegra-api/src/aegra_api/services/assistant_service.py:430-450",
+      "reason": "Assistant lookup restricts access to assistants owned by user.identity or 'system' defaults before extracting graph schemas.",
+      "fix": ""
+    },
+    {
+      "id": "R17",
+      "method": "GET",
+      "path": "/assistants/{assistant_id}/graph",
+      "handler": "libs/aegra-api/src/aegra_api/api/assistants.py:253 get_assistant_graph",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/assistants.py:253 get_assistant_graph",
+        "libs/aegra-api/src/aegra_api/services/assistant_service.py:452 get_assistant_graph",
+        "libs/aegra-api/src/aegra_api/services/langgraph_service.py:349 get_graph_for_validation"
+      ],
+      "object": "path.assistant_id selecting an Assistant's graph structure",
+      "data_access": "SELECT AssistantORM WHERE assistant_id = ? AND (user_id = user.identity OR user_id = 'system')",
+      "auth_checks": "require_auth router dependency; DB query scopes AssistantORM to user.identity or 'system' (does not invoke handle_event)",
+      "verdict": "unlikely",
+      "score": 15,
+      "evidence": "libs/aegra-api/src/aegra_api/services/assistant_service.py:452-488",
+      "reason": "Assistant lookup enforces user_id == user.identity or 'system' before building the visualizable graph.",
+      "fix": ""
+    },
+    {
+      "id": "R18",
+      "method": "GET",
+      "path": "/assistants/{assistant_id}/subgraphs",
+      "handler": "libs/aegra-api/src/aegra_api/api/assistants.py:272 get_assistant_subgraphs",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/assistants.py:272 get_assistant_subgraphs",
+        "libs/aegra-api/src/aegra_api/services/assistant_service.py:490 get_assistant_subgraphs",
+        "libs/aegra-api/src/aegra_api/services/langgraph_service.py:349 get_graph_for_validation"
+      ],
+      "object": "path.assistant_id selecting an Assistant's subgraphs",
+      "data_access": "SELECT AssistantORM WHERE assistant_id = ? AND (user_id = user.identity OR user_id = 'system')",
+      "auth_checks": "require_auth router dependency; DB query scopes AssistantORM to user.identity or 'system' (does not invoke handle_event)",
+      "verdict": "unlikely",
+      "score": 15,
+      "evidence": "libs/aegra-api/src/aegra_api/services/assistant_service.py:490-525",
+      "reason": "Assistant lookup enforces user_id == user.identity or 'system' before inspecting subgraphs.",
+      "fix": ""
+    },
+    {
+      "id": "R28",
+      "method": "GET",
+      "path": "/threads/{thread_id}/history",
+      "handler": "libs/aegra-api/src/aegra_api/api/threads.py:694 get_thread_history_get",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/threads.py:694 get_thread_history_get",
+        "libs/aegra-api/src/aegra_api/api/threads.py:601 get_thread_history_post",
+        "SELECT ThreadORM WHERE thread_id = ? AND user_id = user.identity",
+        "agent.aget_state_history(config, ...)"
+      ],
+      "object": "path.thread_id selecting Thread checkpoint history",
+      "data_access": "SELECT ThreadORM WHERE thread_id = ? AND user_id = user.identity; AsyncPostgresSaver via agent.aget_state_history(config)",
+      "auth_checks": "require_auth router dependency; delegates to get_thread_history_post with checkpoint=None and string before",
+      "verdict": "unlikely",
+      "score": 10,
+      "evidence": "libs/aegra-api/src/aegra_api/api/threads.py:715-725",
+      "reason": "Delegates to get_thread_history_post with checkpoint=None and before as a plain checkpoint_id string, preventing config['configurable']['thread_id'] override while enforcing ThreadORM.user_id == user.identity.",
+      "fix": ""
+    },
+    {
+      "id": "R26",
+      "method": "POST",
+      "path": "/threads/{thread_id}/state/checkpoint",
+      "handler": "libs/aegra-api/src/aegra_api/api/threads.py:573 get_thread_state_at_checkpoint_post",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/threads.py:573 get_thread_state_at_checkpoint_post",
+        "libs/aegra-api/src/aegra_api/api/threads.py:496 get_thread_state_at_checkpoint",
+        "SELECT ThreadORM WHERE thread_id = ? AND user_id = user.identity",
+        "agent.aget_state(config)"
+      ],
+      "object": "path.thread_id and body.checkpoint.checkpoint_id",
+      "data_access": "SELECT ThreadORM WHERE thread_id = ? AND user_id = user.identity; AsyncPostgresSaver via agent.aget_state(config)",
+      "auth_checks": "require_auth router dependency; delegates to get_thread_state_at_checkpoint using path thread_id (ignores body.checkpoint.thread_id)",
+      "verdict": "unlikely",
+      "score": 10,
+      "evidence": "libs/aegra-api/src/aegra_api/api/threads.py:585-597",
+      "reason": "Although ThreadCheckpoint has a thread_id field, the handler ignores request.checkpoint.thread_id and passes only the URL path thread_id, checkpoint_id, and checkpoint_ns to get_thread_state_at_checkpoint, which verifies ownership.",
+      "fix": ""
+    },
+    {
+      "id": "R36",
+      "method": "GET",
+      "path": "/threads/{thread_id}/runs/{run_id}/join",
+      "handler": "libs/aegra-api/src/aegra_api/api/runs.py:225 join_run",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/runs.py:225 join_run",
+        "SELECT RunORM WHERE run_id = ? AND thread_id = ? AND user_id = user.identity",
+        "libs/aegra-api/src/aegra_api/services/run_waiters.py:48 heartbeat_wait_body",
+        "libs/aegra-api/src/aegra_api/services/run_waiters.py:24 read_run_output"
+      ],
+      "object": "path.thread_id and path.run_id selecting a Run to join",
+      "data_access": "SELECT RunORM WHERE run_id = ? AND thread_id = ? AND user_id = user.identity (both initial check and read_run_output)",
+      "auth_checks": "require_auth router dependency; both initial DB check and read_run_output enforce RunORM.user_id == user.identity (omits handle_event)",
+      "verdict": "unlikely",
+      "score": 10,
+      "evidence": "libs/aegra-api/src/aegra_api/api/runs.py:248-259; libs/aegra-api/src/aegra_api/services/run_waiters.py:24-40",
+      "reason": "Both the initial validation query and the final output query strictly scope RunORM by run_id, thread_id, and user.identity.",
+      "fix": ""
+    },
+    {
+      "id": "R25",
+      "method": "GET",
+      "path": "/threads/{thread_id}/state/{checkpoint_id}",
+      "handler": "libs/aegra-api/src/aegra_api/api/threads.py:496 get_thread_state_at_checkpoint",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/threads.py:496 get_thread_state_at_checkpoint",
+        "SELECT ThreadORM WHERE thread_id = ? AND user_id = user.identity",
+        "libs/aegra-api/src/aegra_api/services/langgraph_service.py:555 create_thread_config",
+        "agent.aget_state(config)"
+      ],
+      "object": "path.thread_id and path.checkpoint_id selecting a Thread checkpoint",
+      "data_access": "SELECT ThreadORM WHERE thread_id = ? AND user_id = user.identity; AsyncPostgresSaver via agent.aget_state(config)",
+      "auth_checks": "require_auth router dependency; ThreadORM.user_id == user.identity check before checkpointer read (omits handle_event)",
+      "verdict": "unlikely",
+      "score": 10,
+      "evidence": "libs/aegra-api/src/aegra_api/api/threads.py:510-544",
+      "reason": "Verifies ThreadORM.user_id == user.identity on thread_id and only sets checkpoint_id and checkpoint_ns in config['configurable'], scoping the checkpointer lookup to the owned thread.",
+      "fix": ""
+    },
+    {
+      "id": "R35",
+      "method": "PATCH",
+      "path": "/threads/{thread_id}/runs/{run_id}",
+      "handler": "libs/aegra-api/src/aegra_api/api/runs.py:181 update_run",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/runs.py:181 update_run",
+        "SELECT RunORM WHERE run_id = ? AND thread_id = ? AND user_id = user.identity",
+        "streaming_service.interrupt_run(run_id)",
+        "UPDATE RunORM WHERE run_id = ?"
+      ],
+      "object": "path.thread_id and path.run_id selecting a Run to interrupt",
+      "data_access": "SELECT RunORM scoped by user_id == user.identity; interrupt + UPDATE RunORM",
+      "auth_checks": "require_auth router dependency; pre-check SELECT enforces RunORM.user_id == user.identity (omits handle_event)",
+      "verdict": "unlikely",
+      "score": 10,
+      "evidence": "libs/aegra-api/src/aegra_api/api/runs.py:194-215",
+      "reason": "Verifies RunORM ownership via run_id, thread_id, and user_id == user.identity before interrupting or updating the run.",
+      "fix": ""
+    },
+    {
+      "id": "R23",
+      "method": "GET",
+      "path": "/threads/{thread_id}/state",
+      "handler": "libs/aegra-api/src/aegra_api/api/threads.py:282 get_thread_state",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/threads.py:282 get_thread_state",
+        "SELECT ThreadORM WHERE thread_id = ? AND user_id = user.identity",
+        "libs/aegra-api/src/aegra_api/services/langgraph_service.py:555 create_thread_config",
+        "agent.aget_state(config)"
+      ],
+      "object": "path.thread_id selecting Thread state from LangGraph checkpointer",
+      "data_access": "SELECT ThreadORM WHERE thread_id = ? AND user_id = user.identity; AsyncPostgresSaver via agent.aget_state(config)",
+      "auth_checks": "require_auth router dependency; ThreadORM.user_id == user.identity check before checkpointer read (omits handle_event)",
+      "verdict": "unlikely",
+      "score": 10,
+      "evidence": "libs/aegra-api/src/aegra_api/api/threads.py:296-336",
+      "reason": "Enforces ThreadORM.user_id == user.identity and only allows setting checkpoint_ns on config['configurable'], so the caller cannot redirect the checkpointer lookup to another thread_id.",
+      "fix": ""
+    },
+    {
+      "id": "R22",
+      "method": "PATCH",
+      "path": "/threads/{thread_id}",
+      "handler": "libs/aegra-api/src/aegra_api/api/threads.py:244 update_thread",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/threads.py:244 update_thread",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "SELECT ThreadORM WHERE thread_id = ? AND user_id = user.identity; update metadata_json"
+      ],
+      "object": "path.thread_id selecting a Thread to update",
+      "data_access": "SELECT ThreadORM WHERE thread_id = ? AND user_id = user.identity; UPDATE metadata_json",
+      "auth_checks": "require_auth router dependency; handle_event('threads', 'update'); DB query filters by ThreadORM.user_id == user.identity",
+      "verdict": "unlikely",
+      "score": 10,
+      "evidence": "libs/aegra-api/src/aegra_api/api/threads.py:265-279",
+      "reason": "Only threads matching ThreadORM.user_id == user.identity can be updated; callers can overwrite metadata_json['owner'] on their own thread, but cannot modify another user's thread or change the user_id column.",
+      "fix": ""
+    },
+    {
+      "id": "R34",
+      "method": "GET",
+      "path": "/threads/{thread_id}/runs",
+      "handler": "libs/aegra-api/src/aegra_api/api/runs.py:151 list_runs",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/runs.py:151 list_runs",
+        "SELECT RunORM WHERE thread_id = ? AND user_id = user.identity"
+      ],
+      "object": "path.thread_id selecting Runs on a thread",
+      "data_access": "SELECT RunORM WHERE thread_id = ? AND user_id = user.identity",
+      "auth_checks": "require_auth router dependency; DB query filters RunORM by user_id == user.identity (omits handle_event)",
+      "verdict": "unlikely",
+      "score": 10,
+      "evidence": "libs/aegra-api/src/aegra_api/api/runs.py:165-178",
+      "reason": "Query filters RunORM by user_id == user.identity so a caller cannot list runs belonging to another user even if they supply a victim's thread_id.",
+      "fix": ""
+    },
+    {
+      "id": "R20",
+      "method": "GET",
+      "path": "/threads",
+      "handler": "libs/aegra-api/src/aegra_api/api/threads.py:195 list_threads",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/threads.py:195 list_threads",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "SELECT ThreadORM WHERE user_id = user.identity"
+      ],
+      "object": "",
+      "data_access": "SELECT ThreadORM WHERE user_id = user.identity",
+      "auth_checks": "require_auth router dependency; handle_event('threads', 'search'); DB query scoped to ThreadORM.user_id == user.identity",
+      "verdict": "unlikely",
+      "score": 10,
+      "evidence": "libs/aegra-api/src/aegra_api/api/threads.py:208-216",
+      "reason": "Query strictly filters ThreadORM by user.identity (custom @auth.on filters are currently a no-op pass, but base per-user scoping is enforced).",
+      "fix": ""
+    },
+    {
+      "id": "R38",
+      "method": "GET",
+      "path": "/threads/{thread_id}/runs/{run_id}/stream",
+      "handler": "libs/aegra-api/src/aegra_api/api/runs.py:310 stream_run",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/runs.py:310 stream_run",
+        "SELECT RunORM WHERE run_id = ? AND thread_id = ? AND user_id = user.identity",
+        "libs/aegra-api/src/aegra_api/services/streaming_service.py:85 stream_run_execution"
+      ],
+      "object": "path.thread_id and path.run_id selecting a Run to stream",
+      "data_access": "SELECT RunORM WHERE run_id = ? AND thread_id = ? AND user_id = user.identity; broker replay/live stream",
+      "auth_checks": "require_auth router dependency; DB query enforces RunORM.user_id == user.identity (omits handle_event)",
+      "verdict": "unlikely",
+      "score": 10,
+      "evidence": "libs/aegra-api/src/aegra_api/api/runs.py:327-336",
+      "reason": "Verifies RunORM ownership via run_id, thread_id, and user_id == user.identity before attaching to the run's SSE broker.",
+      "fix": ""
+    },
+    {
+      "id": "R39",
+      "method": "POST",
+      "path": "/threads/{thread_id}/runs/{run_id}/cancel",
+      "handler": "libs/aegra-api/src/aegra_api/api/runs.py:366 cancel_run_endpoint",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/runs.py:366 cancel_run_endpoint",
+        "SELECT RunORM WHERE run_id = ? AND thread_id = ? AND user_id = user.identity",
+        "streaming_service.cancel_run / interrupt_run",
+        "UPDATE RunORM"
+      ],
+      "object": "path.thread_id and path.run_id selecting a Run to cancel",
+      "data_access": "SELECT RunORM scoped by user_id == user.identity; cancel/interrupt broker + UPDATE RunORM",
+      "auth_checks": "require_auth router dependency; pre-check and reload SELECT enforce RunORM.user_id == user.identity (omits handle_event)",
+      "verdict": "unlikely",
+      "score": 10,
+      "evidence": "libs/aegra-api/src/aegra_api/api/runs.py:386-395",
+      "reason": "Verifies RunORM ownership via run_id, thread_id, and user_id == user.identity before issuing cancellation or updating status.",
+      "fix": ""
+    },
+    {
+      "id": "R10",
+      "method": "POST",
+      "path": "/assistants/count",
+      "handler": "libs/aegra-api/src/aegra_api/api/assistants.py:102 count_assistants",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/assistants.py:102 count_assistants",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "libs/aegra-api/src/aegra_api/services/assistant_service.py:237 count_assistants"
+      ],
+      "object": "body filters counting Assistants",
+      "data_access": "SELECT COUNT(*) FROM assistant WHERE user_id = user_identity OR user_id = 'system'",
+      "auth_checks": "require_auth router dependency; handle_event('assistants', 'search'); DB query scoped to user_identity or 'system'",
+      "verdict": "unlikely",
+      "score": 10,
+      "evidence": "libs/aegra-api/src/aegra_api/api/assistants.py:112-121; libs/aegra-api/src/aegra_api/services/assistant_service.py:242-259",
+      "reason": "Count query always filters AssistantORM to user_identity or 'system' defaults.",
+      "fix": ""
+    },
+    {
+      "id": "R9",
+      "method": "POST",
+      "path": "/assistants/search",
+      "handler": "libs/aegra-api/src/aegra_api/api/assistants.py:80 search_assistants",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/assistants.py:80 search_assistants",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "libs/aegra-api/src/aegra_api/services/assistant_service.py:206 search_assistants"
+      ],
+      "object": "body filters (name, description, graph_id, metadata) selecting Assistants",
+      "data_access": "SELECT AssistantORM WHERE user_id = user_identity OR user_id = 'system'",
+      "auth_checks": "require_auth router dependency; handle_event('assistants', 'search'); DB query scoped to user_identity or 'system'",
+      "verdict": "unlikely",
+      "score": 10,
+      "evidence": "libs/aegra-api/src/aegra_api/api/assistants.py:90-99; libs/aegra-api/src/aegra_api/services/assistant_service.py:211-235",
+      "reason": "Search query always restricts AssistantORM rows to user_identity or 'system'; although custom @auth.on handler filters written to request.filters are ignored by AssistantService, users cannot read other users' private assistants.",
+      "fix": ""
+    },
+    {
+      "id": "R8",
+      "method": "GET",
+      "path": "/assistants",
+      "handler": "libs/aegra-api/src/aegra_api/api/assistants.py:57 list_assistants",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/assistants.py:57 list_assistants",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "libs/aegra-api/src/aegra_api/services/assistant_service.py:198 list_assistants / search_assistants"
+      ],
+      "object": "",
+      "data_access": "SELECT AssistantORM WHERE user_id = user_identity OR user_id = 'system'",
+      "auth_checks": "require_auth router dependency; handle_event('assistants', 'search'); DB query scoped to user_identity or 'system'",
+      "verdict": "unlikely",
+      "score": 10,
+      "evidence": "libs/aegra-api/src/aegra_api/api/assistants.py:67-76; libs/aegra-api/src/aegra_api/services/assistant_service.py:198-205",
+      "reason": "Results are always scoped to assistants owned by user.identity or shared 'system' defaults; custom @auth.on search filters are not applied because AssistantSearchRequest lacks a filters field, but base user isolation holds.",
+      "fix": ""
+    },
+    {
+      "id": "R40",
+      "method": "DELETE",
+      "path": "/threads/{thread_id}/runs/{run_id}",
+      "handler": "libs/aegra-api/src/aegra_api/api/runs.py:446 delete_run",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/runs.py:446 delete_run",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "SELECT/DELETE RunORM WHERE run_id = ? AND thread_id = ? AND user_id = user.identity"
+      ],
+      "object": "path.thread_id and path.run_id selecting a Run to delete",
+      "data_access": "SELECT and DELETE RunORM scoped by run_id, thread_id, and user_id == user.identity",
+      "auth_checks": "require_auth router dependency; handle_event('runs', 'delete'); both SELECT and DELETE filter by RunORM.user_id == user.identity",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "libs/aegra-api/src/aegra_api/api/runs.py:464-500",
+      "reason": "Both the lookup and the DELETE statement strictly enforce RunORM.user_id == user.identity.",
+      "fix": ""
+    },
+    {
+      "id": "R44",
+      "method": "PUT",
+      "path": "/store/items",
+      "handler": "libs/aegra-api/src/aegra_api/api/store.py:26 put_store_item",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/store.py:26 put_store_item",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "libs/aegra-api/src/aegra_api/api/store.py:214 apply_user_namespace_scoping",
+        "store.aput(namespace, key, value)"
+      ],
+      "object": "body.namespace and body.key selecting a Store item",
+      "data_access": "AsyncPostgresStore.aput scoped to ['users', user.identity, ...]",
+      "auth_checks": "require_auth router dependency; handle_event('store', 'put'); apply_user_namespace_scoping enforces ['users', user.identity] prefix",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "libs/aegra-api/src/aegra_api/api/store.py:45-50,214-226",
+      "reason": "All writes are unconditionally prefixed with ['users', user.identity] by apply_user_namespace_scoping, isolating store keys per user.",
+      "fix": ""
+    },
+    {
+      "id": "R45",
+      "method": "GET",
+      "path": "/store/items",
+      "handler": "libs/aegra-api/src/aegra_api/api/store.py:54 get_store_item",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/store.py:54 get_store_item",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "libs/aegra-api/src/aegra_api/api/store.py:214 apply_user_namespace_scoping",
+        "store.aget(namespace, key)"
+      ],
+      "object": "query.namespace and query.key selecting a Store item",
+      "data_access": "AsyncPostgresStore.aget scoped to ['users', user.identity, ...]",
+      "auth_checks": "require_auth router dependency; handle_event('store', 'get'); apply_user_namespace_scoping enforces ['users', user.identity] prefix",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "libs/aegra-api/src/aegra_api/api/store.py:76-90,214-226",
+      "reason": "Namespace input (dotted string or list) is normalized and forced under ['users', user.identity] before calling store.aget.",
+      "fix": ""
+    },
+    {
+      "id": "R46",
+      "method": "DELETE",
+      "path": "/store/items",
+      "handler": "libs/aegra-api/src/aegra_api/api/store.py:94 delete_store_item",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/store.py:94 delete_store_item",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "libs/aegra-api/src/aegra_api/api/store.py:214 apply_user_namespace_scoping",
+        "store.adelete(namespace, key)"
+      ],
+      "object": "body/query.namespace and key selecting a Store item to delete",
+      "data_access": "AsyncPostgresStore.adelete scoped to ['users', user.identity, ...]",
+      "auth_checks": "require_auth router dependency; handle_event('store', 'delete'); apply_user_namespace_scoping enforces ['users', user.identity] prefix",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "libs/aegra-api/src/aegra_api/api/store.py:124-133,214-226",
+      "reason": "Deletes are unconditionally constrained to the caller's ['users', user.identity] namespace prefix.",
+      "fix": ""
+    },
+    {
+      "id": "R47",
+      "method": "POST",
+      "path": "/store/items/search",
+      "handler": "libs/aegra-api/src/aegra_api/api/store.py:136 search_store_items",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/store.py:136 search_store_items",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "libs/aegra-api/src/aegra_api/api/store.py:214 apply_user_namespace_scoping",
+        "store.asearch(prefix, ...)"
+      ],
+      "object": "body.namespace_prefix selecting Store items to search",
+      "data_access": "AsyncPostgresStore.asearch scoped to ['users', user.identity, ...]",
+      "auth_checks": "require_auth router dependency; handle_event('store', 'search'); apply_user_namespace_scoping enforces ['users', user.identity] prefix",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "libs/aegra-api/src/aegra_api/api/store.py:157-171,214-226",
+      "reason": "Search prefix is always scoped under ['users', user.identity] via apply_user_namespace_scoping.",
+      "fix": ""
+    },
+    {
+      "id": "R48",
+      "method": "POST",
+      "path": "/store/namespaces",
+      "handler": "libs/aegra-api/src/aegra_api/api/store.py:181 list_namespaces",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/store.py:181 list_namespaces",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "libs/aegra-api/src/aegra_api/api/store.py:214 apply_user_namespace_scoping",
+        "store.alist_namespaces(prefix, ...)"
+      ],
+      "object": "body.prefix and body.suffix selecting Store namespaces",
+      "data_access": "AsyncPostgresStore.alist_namespaces scoped to prefix ['users', user.identity, ...]",
+      "auth_checks": "require_auth router dependency; handle_event('store', 'search'); apply_user_namespace_scoping enforces ['users', user.identity] prefix",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "libs/aegra-api/src/aegra_api/api/store.py:199-211,214-226",
+      "reason": "Namespace listing always constrains the prefix to ['users', user.identity, ...], isolating namespace discovery per user.",
+      "fix": ""
+    },
+    {
+      "id": "R33",
+      "method": "GET",
+      "path": "/threads/{thread_id}/runs/{run_id}",
+      "handler": "libs/aegra-api/src/aegra_api/api/runs.py:115 get_run",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/runs.py:115 get_run",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "SELECT RunORM WHERE run_id = ? AND thread_id = ? AND user_id = user.identity"
+      ],
+      "object": "path.thread_id and path.run_id selecting a Run",
+      "data_access": "SELECT RunORM WHERE run_id = ? AND thread_id = ? AND user_id = user.identity",
+      "auth_checks": "require_auth router dependency; handle_event('runs', 'read'); DB query enforces RunORM.user_id == user.identity",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "libs/aegra-api/src/aegra_api/api/runs.py:131-141",
+      "reason": "Run lookup strictly filters by run_id, thread_id, and user_id == user.identity, preventing retrieval of another user's run records.",
+      "fix": ""
+    },
+    {
+      "id": "R30",
+      "method": "POST",
+      "path": "/threads/search",
+      "handler": "libs/aegra-api/src/aegra_api/api/threads.py:775 search_threads",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/threads.py:775 search_threads",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "SELECT ThreadORM WHERE user_id = user.identity"
+      ],
+      "object": "body search filters selecting Threads",
+      "data_access": "SELECT ThreadORM WHERE user_id = user.identity AND ...",
+      "auth_checks": "require_auth router dependency; handle_event('threads', 'search'); DB query filters by ThreadORM.user_id == user.identity",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "libs/aegra-api/src/aegra_api/api/threads.py:786-816",
+      "reason": "Search query always restricts results to ThreadORM.user_id == user.identity.",
+      "fix": ""
+    },
+    {
+      "id": "R29",
+      "method": "DELETE",
+      "path": "/threads/{thread_id}",
+      "handler": "libs/aegra-api/src/aegra_api/api/threads.py:728 delete_thread",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/threads.py:728 delete_thread",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "SELECT ThreadORM WHERE thread_id = ? AND user_id = user.identity",
+        "SELECT RunORM WHERE thread_id = ? AND user_id = user.identity",
+        "session.delete(thread)"
+      ],
+      "object": "path.thread_id selecting a Thread to delete",
+      "data_access": "SELECT/DELETE ThreadORM scoped by user_id == user.identity; cancel active RunORM scoped by user_id == user.identity",
+      "auth_checks": "require_auth router dependency; handle_event('threads', 'delete'); DB queries filter both ThreadORM and RunORM by user.identity",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "libs/aegra-api/src/aegra_api/api/threads.py:744-769",
+      "reason": "Verifies ThreadORM.user_id == user.identity before cancelling runs and deleting the thread.",
+      "fix": ""
+    },
+    {
+      "id": "R21",
+      "method": "GET",
+      "path": "/threads/{thread_id}",
+      "handler": "libs/aegra-api/src/aegra_api/api/threads.py:222 get_thread",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/threads.py:222 get_thread",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "SELECT ThreadORM WHERE thread_id = ? AND user_id = user.identity"
+      ],
+      "object": "path.thread_id selecting a Thread",
+      "data_access": "SELECT ThreadORM WHERE thread_id = ? AND user_id = user.identity",
+      "auth_checks": "require_auth router dependency; handle_event('threads', 'read'); DB query filters by ThreadORM.user_id == user.identity",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "libs/aegra-api/src/aegra_api/api/threads.py:235-241",
+      "reason": "Thread lookup explicitly scopes by ThreadORM.user_id == user.identity and returns 404 otherwise.",
+      "fix": ""
+    },
+    {
+      "id": "R19",
+      "method": "POST",
+      "path": "/threads",
+      "handler": "libs/aegra-api/src/aegra_api/api/threads.py:134 create_thread",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/threads.py:134 create_thread",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "SELECT/INSERT ThreadORM"
+      ],
+      "object": "body.thread_id (optional Thread ID)",
+      "data_access": "SELECT ThreadORM WHERE thread_id = ? AND user_id = user.identity; INSERT ThreadORM with user_id = user.identity",
+      "auth_checks": "require_auth router dependency; handle_event('threads', 'create'); ThreadORM.user_id == user.identity on existence check and insert",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "libs/aegra-api/src/aegra_api/api/threads.py:159-186",
+      "reason": "Existing thread lookup for idempotency is scoped by user.identity, and new threads are created with user_id and metadata['owner'] set to user.identity.",
+      "fix": ""
+    },
+    {
+      "id": "R13",
+      "method": "DELETE",
+      "path": "/assistants/{assistant_id}",
+      "handler": "libs/aegra-api/src/aegra_api/api/assistants.py:178 delete_assistant",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/assistants.py:178 delete_assistant",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "libs/aegra-api/src/aegra_api/services/assistant_service.py:338 delete_assistant"
+      ],
+      "object": "path.assistant_id selecting an Assistant to delete",
+      "data_access": "SELECT AssistantORM WHERE assistant_id = ? AND user_id = user_identity; session.delete(assistant)",
+      "auth_checks": "require_auth router dependency; handle_event('assistants', 'delete'); DB SELECT enforces user_id == user_identity",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "libs/aegra-api/src/aegra_api/services/assistant_service.py:338-352",
+      "reason": "Assistant lookup strictly requires AssistantORM.user_id == user_identity before deletion.",
+      "fix": ""
+    },
+    {
+      "id": "R12",
+      "method": "PATCH",
+      "path": "/assistants/{assistant_id}",
+      "handler": "libs/aegra-api/src/aegra_api/api/assistants.py:152 update_assistant",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/assistants.py:152 update_assistant",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "libs/aegra-api/src/aegra_api/services/assistant_service.py:273 update_assistant"
+      ],
+      "object": "path.assistant_id selecting an Assistant to update",
+      "data_access": "SELECT/UPDATE AssistantORM WHERE assistant_id = ? AND user_id = user_identity; INSERT AssistantVersionORM",
+      "auth_checks": "require_auth router dependency; handle_event('assistants', 'update'); DB SELECT and UPDATE both enforce user_id == user_identity",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "libs/aegra-api/src/aegra_api/services/assistant_service.py:290-335",
+      "reason": "Both the pre-check SELECT and the UPDATE strictly require AssistantORM.user_id == user_identity (excluding even 'system' assistants).",
+      "fix": ""
+    },
+    {
+      "id": "R11",
+      "method": "GET",
+      "path": "/assistants/{assistant_id}",
+      "handler": "libs/aegra-api/src/aegra_api/api/assistants.py:129 get_assistant",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/assistants.py:129 get_assistant",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "libs/aegra-api/src/aegra_api/services/assistant_service.py:261 get_assistant"
+      ],
+      "object": "path.assistant_id selecting an Assistant",
+      "data_access": "SELECT AssistantORM WHERE assistant_id = ? AND (user_id = user_identity OR user_id = 'system')",
+      "auth_checks": "require_auth router dependency; handle_event('assistants', 'read'); DB query scoped to user_identity or 'system'",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "libs/aegra-api/src/aegra_api/services/assistant_service.py:261-271",
+      "reason": "Lookup enforces ownership by restricting AssistantORM to user_identity or 'system' defaults and returns 404 otherwise.",
+      "fix": ""
+    },
+    {
+      "id": "R7",
+      "method": "POST",
+      "path": "/assistants",
+      "handler": "libs/aegra-api/src/aegra_api/api/assistants.py:31 create_assistant",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/api/assistants.py:31 create_assistant",
+        "libs/aegra-api/src/aegra_api/core/auth_handlers.py:55 handle_event",
+        "libs/aegra-api/src/aegra_api/services/assistant_service.py:122 create_assistant"
+      ],
+      "object": "body.assistant_id (optional Assistant ID) and body.graph_id",
+      "data_access": "SELECT AssistantORM WHERE user_id = user_identity AND (...); INSERT AssistantORM + AssistantVersionORM with user_id = user_identity",
+      "auth_checks": "require_auth router dependency; handle_event('assistants', 'create'); AssistantORM.user_id == user_identity on existence check and insert",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "libs/aegra-api/src/aegra_api/services/assistant_service.py:163-196",
+      "reason": "New assistants are always created with user_id bound to the authenticated user, and duplicate checks are scoped to user_identity (colliding with another user's assistant_id fails at DB PK constraint rather than returning or modifying the other user's record).",
+      "fix": ""
+    },
+    {
+      "id": "R6",
+      "method": "GET",
+      "path": "/metrics",
+      "handler": "libs/aegra-api/src/aegra_api/observability/metrics.py:15 setup_prometheus_metrics",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/main.py:310 setup_prometheus_metrics",
+        "libs/aegra-api/src/aegra_api/observability/metrics.py:42 instrumentator.expose"
+      ],
+      "object": "",
+      "data_access": "Prometheus registry exposition (when ENABLE_PROMETHEUS_METRICS=true)",
+      "auth_checks": "none (intentionally unauthenticated when enabled)",
+      "verdict": "unlikely",
+      "score": 0,
+      "evidence": "libs/aegra-api/src/aegra_api/observability/metrics.py:34-43",
+      "reason": "Exposes aggregate Prometheus metrics when enabled; does not accept or access per-user objects.",
+      "fix": ""
+    },
+    {
+      "id": "R5",
+      "method": "GET",
+      "path": "/live",
+      "handler": "libs/aegra-api/src/aegra_api/core/health.py:143 liveness_check",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/core/health.py:143 liveness_check"
+      ],
+      "object": "",
+      "data_access": "",
+      "auth_checks": "none (public liveness probe)",
+      "verdict": "unlikely",
+      "score": 0,
+      "evidence": "libs/aegra-api/src/aegra_api/core/health.py:143-149",
+      "reason": "Returns static alive status with no object identifier or data access.",
+      "fix": ""
+    },
+    {
+      "id": "R4",
+      "method": "GET",
+      "path": "/ready",
+      "handler": "libs/aegra-api/src/aegra_api/core/health.py:107 readiness_check",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/core/health.py:107 readiness_check",
+        "db_manager.engine SELECT 1",
+        "checkpointer.aget_tuple('ready-check')",
+        "store.aget(('ready',), 'check')"
+      ],
+      "object": "",
+      "data_access": "Hardcoded readiness probes on Postgres, checkpointer, and store",
+      "auth_checks": "none (public readiness probe)",
+      "verdict": "unlikely",
+      "score": 0,
+      "evidence": "libs/aegra-api/src/aegra_api/core/health.py:107-139",
+      "reason": "Performs readiness probes using hardcoded identifiers only; no user-controlled object identifier is accepted.",
+      "fix": ""
+    },
+    {
+      "id": "R3",
+      "method": "GET",
+      "path": "/health",
+      "handler": "libs/aegra-api/src/aegra_api/core/health.py:51 health_check",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/core/health.py:51 health_check",
+        "db_manager.engine SELECT 1",
+        "checkpointer.aget_tuple('health-check')",
+        "store.aget(('health',), 'check')"
+      ],
+      "object": "",
+      "data_access": "Hardcoded connectivity probes on Postgres, checkpointer, and store",
+      "auth_checks": "none (public health endpoint)",
+      "verdict": "unlikely",
+      "score": 0,
+      "evidence": "libs/aegra-api/src/aegra_api/core/health.py:51-103",
+      "reason": "Performs connectivity probes using hardcoded identifiers only; no user-controlled object identifier is accepted.",
+      "fix": ""
+    },
+    {
+      "id": "R2",
+      "method": "GET",
+      "path": "/info",
+      "handler": "libs/aegra-api/src/aegra_api/core/health.py:34 info",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/core/health.py:34 info"
+      ],
+      "object": "",
+      "data_access": "",
+      "auth_checks": "none (health router is intentionally unauthenticated)",
+      "verdict": "unlikely",
+      "score": 0,
+      "evidence": "libs/aegra-api/src/aegra_api/core/health.py:34-47",
+      "reason": "Returns static service name, version, and feature flags with no object identifier or data access.",
+      "fix": ""
+    },
+    {
+      "id": "R1",
+      "method": "GET",
+      "path": "/",
+      "handler": "libs/aegra-api/src/aegra_api/main.py:172 root_handler",
+      "execution_path": [
+        "libs/aegra-api/src/aegra_api/main.py:172 root_handler"
+      ],
+      "object": "",
+      "data_access": "",
+      "auth_checks": "none (public root status endpoint)",
+      "verdict": "unlikely",
+      "score": 0,
+      "evidence": "libs/aegra-api/src/aegra_api/main.py:172-179",
+      "reason": "Returns static service metadata (name, version, status) and accepts no user-controlled object identifiers.",
+      "fix": ""
+    }
+  ]
+}

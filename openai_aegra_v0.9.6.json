@@ -1,0 +1,1017 @@
+{
+  "repo": "https://github.com/aegra/aegra/tree/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd",
+  "provider": "openai",
+  "model": "gpt-6.2-astra",
+  "thinking": "high",
+  "at": "2026-11-25T10:43:35Z",
+  "turns": 13,
+  "forced_stop": true,
+  "usage": {
+    "input": 1647649,
+    "tool_use_input": 0,
+    "cached": 1280000,
+    "output": 15748,
+    "thoughts": 13210,
+    "web_searches": 32,
+    "cost_estimate": 4.9315999999999995
+  },
+  "framework": "FastAPI and Starlette, with APIRouter modules mounted by main.py. Source paths below are relative to libs/aegra-api/src/aegra_api/ unless they start with examples/. Line references use the fetched source views.",
+  "summary": "This static review covers 51 application routes, including streaming routes, the configured example routes, and optional metrics; framework-generated documentation routes are excluded. With distinct authenticated users, many operations constrain the database query by owner, and existing-run streaming checks the run, thread, and caller before opening either replay or live delivery. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/main.py)) The main findings concern preserving the authorized thread through checkpoint operations, enforcing custom visibility filters in addition to baseline ownership, and keeping thread deletion consistent with checkpoint retention. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/threads.py)) The six run-creation variants remain unknown at the cutoff: their shared execution machinery was identified, but end-to-end authorization of every referenced object was not established; a score of 50 on those entries denotes incomplete evidence, not a confirmed vulnerability. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/runs.py))",
+  "routes": [
+    {
+      "id": "R21",
+      "method": "POST",
+      "path": "/threads/{thread_id}/history",
+      "handler": "api/threads.py:604 get_thread_history_post",
+      "execution_path": [
+        "get_thread_history_post",
+        "owned thread lookup",
+        "history configuration",
+        "graph.aget_state_history"
+      ],
+      "object": "Thread and checkpoint history",
+      "data_access": "Pages through persisted snapshots and converts them to thread-state responses.",
+      "auth_checks": "The path thread is owner-checked before the history configuration is finalized.",
+      "verdict": "possible",
+      "score": 75,
+      "evidence": "api/threads.py:614–645,659–683. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/threads.py))",
+      "reason": "The ownership check on the metadata row does not establish that the subsequent history read stays within that row's persistence scope. Response serialization is not a second authorization check.",
+      "fix": "Bind the history query to the authorized thread independently of caller-supplied checkpoint and pagination options."
+    },
+    {
+      "id": "R18",
+      "method": "POST",
+      "path": "/threads/{thread_id}/state",
+      "handler": "api/threads.py:379 update_thread_state",
+      "execution_path": [
+        "update_thread_state",
+        "read delegation or owned thread lookup",
+        "graph state update"
+      ],
+      "object": "Thread and checkpoint",
+      "data_access": "Reads current state when no values are supplied; otherwise submits an update to the graph checkpointer.",
+      "auth_checks": "The metadata lookup checks the caller's ownership of the path thread. The persistence configuration is then assembled separately.",
+      "verdict": "possible",
+      "score": 75,
+      "evidence": "api/threads.py:392–435,449–458. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/threads.py))",
+      "reason": "The write branch does not establish that the final persistence scope is identical to the thread that passed authorization. The read delegation should not be treated as evidence that the write branch is safe.",
+      "fix": "Construct the write from an immutable authorized thread identity and accept only checkpoint options that cannot change that identity."
+    },
+    {
+      "id": "R25",
+      "method": "POST",
+      "path": "/threads/{thread_id}/runs",
+      "handler": "api/runs.py:34 create_run",
+      "execution_path": [
+        "create_run",
+        "_prepare_run",
+        "persist RunJob",
+        "executor.submit"
+      ],
+      "object": "Parent thread and requested assistant",
+      "data_access": "Prepares a run, updates thread metadata, persists execution parameters, and submits work.",
+      "auth_checks": "Create-run hook and current user are visible. Authorization of every referenced object was not established end to end.",
+      "verdict": "unknown",
+      "score": 50,
+      "evidence": "api/runs.py:33–64; services/run_preparation.py:184–253. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/runs.py))",
+      "reason": "Assigning the new run to the caller does not by itself authorize its parent relationships.",
+      "fix": "Require authorized thread and assistant records before any state change or job submission."
+    },
+    {
+      "id": "R26",
+      "method": "POST",
+      "path": "/threads/{thread_id}/runs/stream",
+      "handler": "api/runs.py:69 create_and_stream_run",
+      "execution_path": [
+        "create_and_stream_run",
+        "shared run preparation",
+        "execute and stream"
+      ],
+      "object": "Parent thread and requested assistant",
+      "data_access": "Creates a run and opens an event stream for it.",
+      "auth_checks": "Authenticated identity is available; the complete creation policy was not established.",
+      "verdict": "unknown",
+      "score": 50,
+      "evidence": "api/runs.py:68–101; services/run_preparation.py:184–253. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/runs.py))",
+      "reason": "This creates work rather than attaching to an existing run. The verified ownership check on stream attachment is not evidence about run creation.",
+      "fix": "Make streaming creation use the same authorized preparation operation as non-streaming creation."
+    },
+    {
+      "id": "R31",
+      "method": "POST",
+      "path": "/threads/{thread_id}/runs/wait",
+      "handler": "api/runs.py:264 wait_for_run",
+      "execution_path": [
+        "wait_for_run",
+        "_prepare_run",
+        "heartbeat_wait_body",
+        "read_run_output"
+      ],
+      "object": "Parent thread and requested assistant",
+      "data_access": "Creates a run and waits for its output.",
+      "auth_checks": "Final output is scoped to caller, thread, and run; the creation path was not fully resolved.",
+      "verdict": "unknown",
+      "score": 50,
+      "evidence": "api/runs.py:278–289; services/run_waiters.py:24–41. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/runs.py))",
+      "reason": "A scoped output read does not establish that all earlier reads and writes during creation were authorized.",
+      "fix": "Authorize all referenced objects before preparation, not only when returning output."
+    },
+    {
+      "id": "R35",
+      "method": "POST",
+      "path": "/runs/wait",
+      "handler": "api/stateless_runs.py:97 stateless_wait_for_run",
+      "execution_path": [
+        "stateless_wait_for_run",
+        "ephemeral thread",
+        "threaded wait path",
+        "conditional cleanup"
+      ],
+      "object": "Requested assistant; server-generated thread",
+      "data_access": "Delegates creation and execution, then handles the ephemeral thread lifecycle.",
+      "auth_checks": "The wrapper uses the current user and generates its thread; delegated object authorization remains unresolved.",
+      "verdict": "unknown",
+      "score": 50,
+      "evidence": "api/stateless_runs.py:2–5,39–74,96–153. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/stateless_runs.py))",
+      "reason": "Generating the thread removes one caller-controlled parent reference, but does not establish authorization of every object used by the run.",
+      "fix": "Apply the shared run-creation authorization contract to stateless runs as well."
+    },
+    {
+      "id": "R36",
+      "method": "POST",
+      "path": "/runs/stream",
+      "handler": "api/stateless_runs.py:157 stateless_stream_run",
+      "execution_path": [
+        "stateless_stream_run",
+        "ephemeral thread",
+        "create_and_stream_run",
+        "conditional cleanup"
+      ],
+      "object": "Requested assistant; server-generated thread",
+      "data_access": "Delegates to threaded streaming with the caller and generated thread ID.",
+      "auth_checks": "Caller is propagated; cleanup selects by thread and owner.",
+      "verdict": "unknown",
+      "score": 50,
+      "evidence": "api/stateless_runs.py:163–198; api/runs.py:68–101. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/stateless_runs.py))",
+      "reason": "The cleanup check protects deletion. It does not establish authorization of inputs to the earlier graph execution.",
+      "fix": "Authorize referenced objects before starting the stream or its underlying job."
+    },
+    {
+      "id": "R37",
+      "method": "POST",
+      "path": "/runs",
+      "handler": "api/stateless_runs.py:213 stateless_create_run",
+      "execution_path": [
+        "stateless_create_run",
+        "ephemeral thread",
+        "create_run",
+        "optional background cleanup"
+      ],
+      "object": "Requested assistant; server-generated thread",
+      "data_access": "Submits a background run through the threaded creation path.",
+      "auth_checks": "Current user is passed to creation and cleanup; complete delegated authorization was not established.",
+      "verdict": "unknown",
+      "score": 50,
+      "evidence": "api/stateless_runs.py:212–244; services/run_preparation.py:198–253. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/stateless_runs.py))",
+      "reason": "A server-generated thread and a caller-owned run record are not evidence that every referenced resource is authorized.",
+      "fix": "Build the job from authorized records and preserve those identities through execution."
+    },
+    {
+      "id": "R14",
+      "method": "GET",
+      "path": "/threads",
+      "handler": "api/threads.py:199 list_threads",
+      "execution_path": [
+        "list_threads",
+        "search authorization hook",
+        "thread collection query"
+      ],
+      "object": "Thread collection",
+      "data_access": "Selects rows owned by the caller.",
+      "auth_checks": "Owner equality is enforced; additional restrictions returned by the search hook are not applied in this branch.",
+      "verdict": "possible",
+      "score": 45,
+      "evidence": "api/threads.py:206–221; docs/guides/authentication.mdx:125–129. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/threads.py))",
+      "reason": "Baseline cross-user isolation is present. A deployment that uses the documented hook to restrict an owner to a subset of their threads can receive a broader list than its policy permits.",
+      "fix": "Use the same policy-constrained query builder for thread listing and search."
+    },
+    {
+      "id": "R3",
+      "method": "POST",
+      "path": "/assistants/search",
+      "handler": "api/assistants.py:77 search_assistants",
+      "execution_path": [
+        "search_assistants",
+        "search authorization hook",
+        "AssistantService.search_assistants"
+      ],
+      "object": "Assistant collection selected by search criteria",
+      "data_access": "Filters the caller-or-system query, then applies pagination.",
+      "auth_checks": "Owner-or-system predicate; route also accepts restrictions from the search hook.",
+      "verdict": "possible",
+      "score": 35,
+      "evidence": "api/assistants.py:86–95; services/assistant_service.py:208–236. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/assistants.py))",
+      "reason": "The query excludes other users' private rows. The route and service do not use the same representation for additional policy filters, so narrower deployment-specific visibility is not established.",
+      "fix": "Intersect policy restrictions with search criteria in SQL and reject unsupported policy fields."
+    },
+    {
+      "id": "R2",
+      "method": "GET",
+      "path": "/assistants",
+      "handler": "api/assistants.py:54 list_assistants",
+      "execution_path": [
+        "list_assistants",
+        "search authorization hook",
+        "AssistantService.list_assistants or search_assistants"
+      ],
+      "object": "Assistant collection",
+      "data_access": "Selects caller-owned and system assistants.",
+      "auth_checks": "Authenticated identity scopes both service branches.",
+      "verdict": "possible",
+      "score": 35,
+      "evidence": "api/assistants.py:62–74; services/assistant_service.py:201–236. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/assistants.py))",
+      "reason": "The baseline owner boundary is present, and system visibility is intentional. The filtered branch does not establish that an additional visibility restriction returned by a custom hook becomes a SQL predicate.",
+      "fix": "Apply normalized authorization predicates in the shared query builder rather than relying on conversion to a search request."
+    },
+    {
+      "id": "R4",
+      "method": "POST",
+      "path": "/assistants/count",
+      "handler": "api/assistants.py:99 count_assistants",
+      "execution_path": [
+        "count_assistants",
+        "search authorization hook",
+        "AssistantService.count_assistants"
+      ],
+      "object": "Count of matching assistants",
+      "data_access": "Counts caller-owned and system rows matching supported search fields.",
+      "auth_checks": "Owner-or-system predicate; custom search hook.",
+      "verdict": "possible",
+      "score": 30,
+      "evidence": "api/assistants.py:108–117; services/assistant_service.py:237–258. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/assistants.py))",
+      "reason": "The result is an aggregate, not an assistant record. A count can nevertheless reveal the existence of records excluded by a narrower custom policy if it does not use the same authorized query as search.",
+      "fix": "Compute the count from the same policy-constrained relation used for listing."
+    },
+    {
+      "id": "R29",
+      "method": "PATCH",
+      "path": "/threads/{thread_id}/runs/{run_id}",
+      "handler": "api/runs.py:170 update_run",
+      "execution_path": [
+        "update_run",
+        "scoped run lookup",
+        "optional broker interruption",
+        "status update"
+      ],
+      "object": "Thread ID and run ID",
+      "data_access": "Checks the selected row before interrupting the run or changing its status.",
+      "auth_checks": "Initial lookup binds run, parent, and owner.",
+      "verdict": "unlikely",
+      "score": 12,
+      "evidence": "api/runs.py:181–212. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/runs.py))",
+      "reason": "Later operations use the same run ID after authorization; an unscoped internal call is not by itself an independently reachable IDOR.",
+      "fix": ""
+    },
+    {
+      "id": "R24",
+      "method": "POST",
+      "path": "/threads/search",
+      "handler": "api/threads.py:769 search_threads",
+      "execution_path": [
+        "search_threads",
+        "search hook",
+        "owner-scoped query with metadata and status filters"
+      ],
+      "object": "Thread collection selected by metadata and status",
+      "data_access": "Selects caller-owned rows before applying filters and pagination.",
+      "auth_checks": "Owner equality; supported hook-provided metadata restrictions are merged into the query.",
+      "verdict": "unlikely",
+      "score": 12,
+      "evidence": "api/threads.py:778–812. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/threads.py))",
+      "reason": "Search criteria narrow the owner-scoped relation. This conclusion does not imply support for every possible custom policy field.",
+      "fix": ""
+    },
+    {
+      "id": "R13",
+      "method": "POST",
+      "path": "/threads",
+      "handler": "api/threads.py:136 create_thread",
+      "execution_path": [
+        "create_thread",
+        "create hook",
+        "owner-scoped existing-thread lookup",
+        "thread insert"
+      ],
+      "object": "Optional client-specified thread ID",
+      "data_access": "Returns an existing owned thread or inserts a row owned by the caller.",
+      "auth_checks": "Existing row must match both the thread ID and caller. New row ownership comes from authenticated identity.",
+      "verdict": "unlikely",
+      "score": 12,
+      "evidence": "api/threads.py:147–196. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/threads.py))",
+      "reason": "The idempotent branch does not return another owner's existing thread. This conclusion concerns the metadata row, not the lifetime of separately persisted checkpoints.",
+      "fix": ""
+    },
+    {
+      "id": "R23",
+      "method": "DELETE",
+      "path": "/threads/{thread_id}",
+      "handler": "api/threads.py:727 delete_thread",
+      "execution_path": [
+        "delete_thread",
+        "delete hook",
+        "owned thread lookup",
+        "owner-scoped active-run lookup",
+        "thread row deletion"
+      ],
+      "object": "Thread ID and its active runs",
+      "data_access": "Cancels matching active runs and deletes the selected thread row.",
+      "auth_checks": "Both the thread lookup and active-run query include the current owner.",
+      "verdict": "unlikely",
+      "score": 12,
+      "evidence": "api/threads.py:732–763; docs/guides/threads-and-state.mdx:137–142. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/threads.py))",
+      "reason": "The immediate deletion is owner-scoped. Separately, the handler says checkpoint history survives deletion, whereas the guide says all state is removed; this review did not establish safe isolation of retained state across the full thread lifecycle.",
+      "fix": "Align checkpoint retention with thread deletion and ensure retained state cannot be rebound to another owner."
+    },
+    {
+      "id": "R22",
+      "method": "GET",
+      "path": "/threads/{thread_id}/history",
+      "handler": "api/threads.py:694 get_thread_history_get",
+      "execution_path": [
+        "get_thread_history_get",
+        "construct bounded history request",
+        "get_thread_history_post",
+        "graph.aget_state_history"
+      ],
+      "object": "Thread ID, checkpoint cursor, and namespace",
+      "data_access": "Delegates with a string cursor and without a body checkpoint configuration.",
+      "auth_checks": "The delegated reader checks ownership of the path thread.",
+      "verdict": "unlikely",
+      "score": 12,
+      "evidence": "api/threads.py:693–724,624–640. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/threads.py))",
+      "reason": "Sharing a helper does not make these two history routes equivalent: the GET adapter constructs a narrower request.",
+      "fix": ""
+    },
+    {
+      "id": "R17",
+      "method": "GET",
+      "path": "/threads/{thread_id}/state",
+      "handler": "api/threads.py:287 get_thread_state",
+      "execution_path": [
+        "get_thread_state",
+        "owned thread lookup",
+        "create_thread_config",
+        "graph.aget_state"
+      ],
+      "object": "Thread ID and optional checkpoint namespace",
+      "data_access": "Reads a snapshot using a configuration built for the selected thread.",
+      "auth_checks": "Checks thread ID and caller before obtaining the graph or returning an empty state.",
+      "verdict": "unlikely",
+      "score": 10,
+      "evidence": "api/threads.py:299–347; services/langgraph_service.py:627–636. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/threads.py))",
+      "reason": "The same thread ID is used for the owner check and the state request. The caller can select a namespace, not a different parent thread through this handler.",
+      "fix": ""
+    },
+    {
+      "id": "R19",
+      "method": "GET",
+      "path": "/threads/{thread_id}/state/{checkpoint_id}",
+      "handler": "api/threads.py:504 get_thread_state_at_checkpoint",
+      "execution_path": [
+        "get_thread_state_at_checkpoint",
+        "owned thread lookup",
+        "create_thread_config",
+        "graph.aget_state"
+      ],
+      "object": "Thread ID, checkpoint ID, and optional namespace",
+      "data_access": "Requests the named checkpoint under the configured thread.",
+      "auth_checks": "Thread ownership is checked before constructing the checkpoint selector.",
+      "verdict": "unlikely",
+      "score": 10,
+      "evidence": "api/threads.py:516–545. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/threads.py))",
+      "reason": "The handler adds the checkpoint selector without replacing the authorized parent thread.",
+      "fix": ""
+    },
+    {
+      "id": "R20",
+      "method": "POST",
+      "path": "/threads/{thread_id}/state/checkpoint",
+      "handler": "api/threads.py:576 get_thread_state_at_checkpoint_post",
+      "execution_path": [
+        "get_thread_state_at_checkpoint_post",
+        "get_thread_state_at_checkpoint",
+        "owned thread lookup",
+        "graph.aget_state"
+      ],
+      "object": "Path thread ID and body checkpoint ID",
+      "data_access": "Delegates to the single-checkpoint reader.",
+      "auth_checks": "Delegation preserves the path thread ID and current user.",
+      "verdict": "unlikely",
+      "score": 10,
+      "evidence": "api/threads.py:587–601,516–545. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/threads.py))",
+      "reason": "This POST is a read adapter. It extracts the checkpoint ID and namespace rather than forwarding the entire body as the storage configuration.",
+      "fix": ""
+    },
+    {
+      "id": "R33",
+      "method": "POST",
+      "path": "/threads/{thread_id}/runs/{run_id}/cancel",
+      "handler": "api/runs.py:359 cancel_run_endpoint",
+      "execution_path": [
+        "cancel_run_endpoint",
+        "scoped run lookup",
+        "broker cancel or interrupt",
+        "status update and scoped reload"
+      ],
+      "object": "Thread ID and run ID",
+      "data_access": "Signals the authorized run and updates its status.",
+      "auth_checks": "Run, parent, and owner are checked before signaling and on final reload.",
+      "verdict": "unlikely",
+      "score": 8,
+      "evidence": "api/runs.py:377–405,418–428. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/runs.py))",
+      "reason": "Cancellation is not sent merely because a caller knows the run ID.",
+      "fix": ""
+    },
+    {
+      "id": "R1",
+      "method": "POST",
+      "path": "/assistants",
+      "handler": "api/assistants.py:30 create_assistant",
+      "execution_path": [
+        "create_assistant",
+        "AssistantService.create_assistant",
+        "owner-scoped existing-assistant lookup or insert"
+      ],
+      "object": "Optional assistant ID; configured graph ID",
+      "data_access": "Looks for an existing assistant belonging to the caller; otherwise inserts the assistant and its initial version.",
+      "auth_checks": "Create hook; the service receives the authenticated identity and assigns it as owner.",
+      "verdict": "unlikely",
+      "score": 8,
+      "evidence": "api/assistants.py:41–51; services/assistant_service.py:120–136,151–200. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/assistants.py))",
+      "reason": "The idempotent branch returns an existing row only after an owner-scoped lookup. Selecting a registered graph is not the same as selecting another user's assistant.",
+      "fix": ""
+    },
+    {
+      "id": "R5",
+      "method": "GET",
+      "path": "/assistants/{assistant_id}",
+      "handler": "api/assistants.py:126 get_assistant",
+      "execution_path": [
+        "get_assistant",
+        "AssistantService.get_assistant",
+        "scoped assistant lookup"
+      ],
+      "object": "Assistant ID",
+      "data_access": "Selects the ID only among caller-owned or system assistants.",
+      "auth_checks": "Read hook and owner-or-system query.",
+      "verdict": "unlikely",
+      "score": 8,
+      "evidence": "api/assistants.py:135–140; services/assistant_service.py:259–269. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/assistants.py))",
+      "reason": "The owner predicate is part of the lookup. A private assistant belonging to a different identity does not match.",
+      "fix": ""
+    },
+    {
+      "id": "R12",
+      "method": "GET",
+      "path": "/assistants/{assistant_id}/subgraphs",
+      "handler": "api/assistants.py:257 get_assistant_subgraphs",
+      "execution_path": [
+        "get_assistant_subgraphs",
+        "AssistantService.get_assistant_subgraphs",
+        "visible assistant lookup",
+        "subgraph enumeration"
+      ],
+      "object": "Assistant ID and optional subgraph namespace",
+      "data_access": "Enumerates subgraphs on the graph obtained from the visible assistant.",
+      "auth_checks": "Assistant ID plus caller-or-system ownership.",
+      "verdict": "unlikely",
+      "score": 8,
+      "evidence": "services/assistant_service.py:481–509. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/services/assistant_service.py))",
+      "reason": "The namespace filters within the selected graph; it does not choose another user's assistant row.",
+      "fix": ""
+    },
+    {
+      "id": "R8",
+      "method": "POST",
+      "path": "/assistants/{assistant_id}/latest",
+      "handler": "api/assistants.py:193 set_assistant_latest",
+      "execution_path": [
+        "set_assistant_latest",
+        "AssistantService.set_assistant_latest",
+        "owned parent lookup",
+        "child version lookup",
+        "scoped update"
+      ],
+      "object": "Assistant ID and version number",
+      "data_access": "Loads the version under the selected assistant and updates the owner-scoped parent.",
+      "auth_checks": "Authenticated user must own the parent assistant.",
+      "verdict": "unlikely",
+      "score": 8,
+      "evidence": "services/assistant_service.py:349–385. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/services/assistant_service.py))",
+      "reason": "A version number is not resolved globally. Both the child selection and parent mutation retain the authorized assistant ID.",
+      "fix": ""
+    },
+    {
+      "id": "R9",
+      "method": "POST",
+      "path": "/assistants/{assistant_id}/versions",
+      "handler": "api/assistants.py:211 list_assistant_versions",
+      "execution_path": [
+        "list_assistant_versions",
+        "AssistantService.list_assistant_versions",
+        "visible parent lookup",
+        "version query"
+      ],
+      "object": "Assistant ID and its version history",
+      "data_access": "Selects versions of an assistant already found in the caller-or-system scope.",
+      "auth_checks": "Parent assistant visibility check.",
+      "verdict": "unlikely",
+      "score": 8,
+      "evidence": "services/assistant_service.py:386–401. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/services/assistant_service.py))",
+      "reason": "The child query relies on a preceding check of the same parent ID; it is not an independent unscoped version lookup.",
+      "fix": ""
+    },
+    {
+      "id": "R28",
+      "method": "GET",
+      "path": "/threads/{thread_id}/runs",
+      "handler": "api/runs.py:137 list_runs",
+      "execution_path": [
+        "list_runs",
+        "thread-and-owner-scoped run query"
+      ],
+      "object": "Thread ID and its run collection",
+      "data_access": "Selects runs matching thread ID and caller before pagination.",
+      "auth_checks": "Run owner equality in the collection query.",
+      "verdict": "unlikely",
+      "score": 7,
+      "evidence": "api/runs.py:151–167. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/runs.py))",
+      "reason": "A thread ID does not cause the endpoint to return runs owned by another user.",
+      "fix": ""
+    },
+    {
+      "id": "R10",
+      "method": "GET",
+      "path": "/assistants/{assistant_id}/schemas",
+      "handler": "api/assistants.py:227 get_assistant_schemas",
+      "execution_path": [
+        "get_assistant_schemas",
+        "AssistantService.get_assistant_schemas",
+        "visible assistant lookup",
+        "graph schema extraction"
+      ],
+      "object": "Assistant ID",
+      "data_access": "Loads the graph named by the visible assistant row.",
+      "auth_checks": "Assistant ID plus caller-or-system ownership.",
+      "verdict": "unlikely",
+      "score": 7,
+      "evidence": "services/assistant_service.py:424–442. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/services/assistant_service.py))",
+      "reason": "The graph is derived from the authorized row before its schema is inspected.",
+      "fix": ""
+    },
+    {
+      "id": "R11",
+      "method": "GET",
+      "path": "/assistants/{assistant_id}/graph",
+      "handler": "api/assistants.py:239 get_assistant_graph",
+      "execution_path": [
+        "get_assistant_graph",
+        "AssistantService.get_assistant_graph",
+        "visible assistant lookup",
+        "graph visualization"
+      ],
+      "object": "Assistant ID",
+      "data_access": "Inspects the graph attached to the caller-visible assistant.",
+      "auth_checks": "Assistant ID plus caller-or-system ownership.",
+      "verdict": "unlikely",
+      "score": 7,
+      "evidence": "services/assistant_service.py:446–474. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/services/assistant_service.py))",
+      "reason": "The expansion option changes the detail returned, not which assistant is selected.",
+      "fix": ""
+    },
+    {
+      "id": "R16",
+      "method": "PATCH",
+      "path": "/threads/{thread_id}",
+      "handler": "api/threads.py:247 update_thread",
+      "execution_path": [
+        "update_thread",
+        "update hook",
+        "owner-scoped thread lookup",
+        "metadata update"
+      ],
+      "object": "Thread ID",
+      "data_access": "Modifies metadata on the selected owned ORM row.",
+      "auth_checks": "The ownership check uses the user_id column, not caller-editable metadata.",
+      "verdict": "unlikely",
+      "score": 7,
+      "evidence": "api/threads.py:256–284. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/threads.py))",
+      "reason": "Changing metadata through this handler does not change the owner column used to select the thread.",
+      "fix": ""
+    },
+    {
+      "id": "R42",
+      "method": "POST",
+      "path": "/store/namespaces",
+      "handler": "api/store.py:179 list_namespaces",
+      "execution_path": [
+        "list_namespaces",
+        "search hook",
+        "user-scoped prefix",
+        "store.alist_namespaces"
+      ],
+      "object": "Namespace prefix and suffix",
+      "data_access": "Enumerates namespaces under the identity-derived prefix.",
+      "auth_checks": "An omitted prefix defaults to the caller's root rather than the global root.",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "api/store.py:187–212,215–227. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/store.py))",
+      "reason": "The suffix and pagination options operate within the scoped enumeration.",
+      "fix": ""
+    },
+    {
+      "id": "R41",
+      "method": "POST",
+      "path": "/store/items/search",
+      "handler": "api/store.py:135 search_store_items",
+      "execution_path": [
+        "search_store_items",
+        "search hook",
+        "user-scoped prefix",
+        "store.asearch"
+      ],
+      "object": "Namespace prefix and matching items",
+      "data_access": "Searches beneath the authenticated user's prefix.",
+      "auth_checks": "Identity scoping is applied after hook and request filters are combined.",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "api/store.py:142–167. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/store.py))",
+      "reason": "Search terms and metadata filters do not choose a different namespace root.",
+      "fix": ""
+    },
+    {
+      "id": "R40",
+      "method": "DELETE",
+      "path": "/store/items",
+      "handler": "api/store.py:92 delete_store_item",
+      "execution_path": [
+        "delete_store_item",
+        "body or query selection",
+        "delete hook",
+        "user scoping",
+        "store.adelete"
+      ],
+      "object": "Namespace and key",
+      "data_access": "Deletes the key from the caller-scoped namespace.",
+      "auth_checks": "Both parameter sources converge before identity scoping.",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "api/store.py:102–129. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/store.py))",
+      "reason": "Selecting the body instead of the query string does not skip authorization.",
+      "fix": ""
+    },
+    {
+      "id": "R39",
+      "method": "GET",
+      "path": "/store/items",
+      "handler": "api/store.py:50 get_store_item",
+      "execution_path": [
+        "get_store_item",
+        "get hook",
+        "namespace normalization and user scoping",
+        "store.aget"
+      ],
+      "object": "Namespace and key",
+      "data_access": "Reads from the scoped namespace tuple.",
+      "auth_checks": "The authenticated identity determines the root after parsing.",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "api/store.py:60–85,215–227. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/store.py))",
+      "reason": "Alternate namespace representations do not remove the caller's prefix.",
+      "fix": ""
+    },
+    {
+      "id": "R38",
+      "method": "PUT",
+      "path": "/store/items",
+      "handler": "api/store.py:23 put_store_item",
+      "execution_path": [
+        "put_store_item",
+        "put hook",
+        "apply_user_namespace_scoping",
+        "store.aput"
+      ],
+      "object": "Namespace and key",
+      "data_access": "Writes the item under the caller's namespace root.",
+      "auth_checks": "Identity-derived scoping is applied after hook processing.",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "api/store.py:28–45,215–227. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/store.py))",
+      "reason": "A caller-provided namespace is not accepted as another user's storage root.",
+      "fix": ""
+    },
+    {
+      "id": "R15",
+      "method": "GET",
+      "path": "/threads/{thread_id}",
+      "handler": "api/threads.py:225 get_thread",
+      "execution_path": [
+        "get_thread",
+        "read hook",
+        "owner-scoped thread lookup"
+      ],
+      "object": "Thread ID",
+      "data_access": "Selects by thread ID and authenticated user ID.",
+      "auth_checks": "Read hook and SQL ownership predicate.",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "api/threads.py:234–243. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/threads.py))",
+      "reason": "A foreign ID does not match the query and produces a not-found response.",
+      "fix": ""
+    },
+    {
+      "id": "R6",
+      "method": "PATCH",
+      "path": "/assistants/{assistant_id}",
+      "handler": "api/assistants.py:148 update_assistant",
+      "execution_path": [
+        "update_assistant",
+        "AssistantService.update_assistant",
+        "owner lookup",
+        "version insert and scoped update"
+      ],
+      "object": "Assistant ID",
+      "data_access": "Creates a version after selecting the owned assistant; updates the parent by ID and owner.",
+      "auth_checks": "Update hook and owner equality.",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "services/assistant_service.py:287–333. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/services/assistant_service.py))",
+      "reason": "System assistants are not included merely because they are readable. The mutation repeats the owner predicate.",
+      "fix": ""
+    },
+    {
+      "id": "R34",
+      "method": "DELETE",
+      "path": "/threads/{thread_id}/runs/{run_id}",
+      "handler": "api/runs.py:435 delete_run",
+      "execution_path": [
+        "delete_run",
+        "delete hook",
+        "scoped run lookup",
+        "optional cancellation",
+        "scoped DELETE"
+      ],
+      "object": "Thread ID and run ID",
+      "data_access": "Deletes using the run ID, thread ID, and authenticated user ID.",
+      "auth_checks": "All three conditions apply before forced cancellation and again to deletion.",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "api/runs.py:447–484. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/runs.py))",
+      "reason": "The force option changes active-run handling, not ownership scope.",
+      "fix": ""
+    },
+    {
+      "id": "R7",
+      "method": "DELETE",
+      "path": "/assistants/{assistant_id}",
+      "handler": "api/assistants.py:171 delete_assistant",
+      "execution_path": [
+        "delete_assistant",
+        "AssistantService.delete_assistant",
+        "delete selected ORM row"
+      ],
+      "object": "Assistant ID",
+      "data_access": "Selects by assistant ID and owner, then deletes the selected row.",
+      "auth_checks": "Delete hook and owner equality.",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "services/assistant_service.py:335–348. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/services/assistant_service.py))",
+      "reason": "A missing or foreign assistant is rejected before deletion.",
+      "fix": ""
+    },
+    {
+      "id": "R32",
+      "method": "GET",
+      "path": "/threads/{thread_id}/runs/{run_id}/stream",
+      "handler": "api/runs.py:298 stream_run",
+      "execution_path": [
+        "stream_run",
+        "scoped run lookup",
+        "stream_run_execution",
+        "run-specific replay or live subscription"
+      ],
+      "object": "Thread ID, run ID, and replay cursor",
+      "data_access": "Opens the broker for the selected run; the cursor chooses a replay position.",
+      "auth_checks": "The route checks run ID, thread ID, and caller before selecting the broker.",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "api/runs.py:312–345; services/streaming_service.py:76–96,106–131; services/redis_broker.py:177–206,230–240. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/runs.py))",
+      "reason": "Neither broker uses the replay cursor to select a different run. A cursor miss stays inside the authorized run's buffer.",
+      "fix": ""
+    },
+    {
+      "id": "R30",
+      "method": "GET",
+      "path": "/threads/{thread_id}/runs/{run_id}/join",
+      "handler": "api/runs.py:215 join_run",
+      "execution_path": [
+        "join_run",
+        "scoped run lookup",
+        "immediate output or heartbeat_wait_body",
+        "read_run_output"
+      ],
+      "object": "Thread ID and run ID",
+      "data_access": "Reads terminal output immediately or fetches it again after waiting.",
+      "auth_checks": "Initial and deferred output reads both include run, thread, and owner.",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "api/runs.py:232–255; services/run_waiters.py:24–41,92–93. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/runs.py))",
+      "reason": "Releasing the database connection during the wait does not discard the ownership check on the final output.",
+      "fix": ""
+    },
+    {
+      "id": "R27",
+      "method": "GET",
+      "path": "/threads/{thread_id}/runs/{run_id}",
+      "handler": "api/runs.py:104 get_run",
+      "execution_path": [
+        "get_run",
+        "read hook",
+        "scoped run lookup"
+      ],
+      "object": "Thread ID and run ID",
+      "data_access": "Selects one run by run ID, parent thread, and caller.",
+      "auth_checks": "All three values must match one row.",
+      "verdict": "unlikely",
+      "score": 5,
+      "evidence": "api/runs.py:114–134. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/api/runs.py))",
+      "reason": "Neither a run ID alone nor a matching parent alone is sufficient.",
+      "fix": ""
+    },
+    {
+      "id": "R43",
+      "method": "GET",
+      "path": "/",
+      "handler": "main.py:159 root_handler",
+      "execution_path": [
+        "root_handler",
+        "application settings"
+      ],
+      "object": "",
+      "data_access": "",
+      "auth_checks": "No caller-selected object.",
+      "verdict": "unlikely",
+      "score": 0,
+      "evidence": "main.py:158–165,301–303,328. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/main.py))",
+      "reason": "Returns service metadata, not a selected user's object.",
+      "fix": ""
+    },
+    {
+      "id": "R44",
+      "method": "GET",
+      "path": "/info",
+      "handler": "core/health.py:33 info",
+      "execution_path": [
+        "info",
+        "service information response"
+      ],
+      "object": "",
+      "data_access": "",
+      "auth_checks": "Intentionally public.",
+      "verdict": "unlikely",
+      "score": 0,
+      "evidence": "core/health.py:32–44. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/core/health.py))",
+      "reason": "No object identifier is consumed.",
+      "fix": ""
+    },
+    {
+      "id": "R45",
+      "method": "GET",
+      "path": "/health",
+      "handler": "core/health.py:47 health_check",
+      "execution_path": [
+        "health_check",
+        "database and fixed backend probes"
+      ],
+      "object": "",
+      "data_access": "Uses a constant SQL probe and fixed checkpoint and store probe identifiers.",
+      "auth_checks": "No caller-selected object.",
+      "verdict": "unlikely",
+      "score": 0,
+      "evidence": "core/health.py:46–93. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/core/health.py))",
+      "reason": "The caller cannot direct the probe to a tenant object.",
+      "fix": ""
+    },
+    {
+      "id": "R46",
+      "method": "GET",
+      "path": "/ready",
+      "handler": "core/health.py:97 readiness_check",
+      "execution_path": [
+        "readiness_check",
+        "database and fixed backend probes"
+      ],
+      "object": "",
+      "data_access": "Checks connectivity and uses fixed readiness identifiers.",
+      "auth_checks": "No caller-selected object.",
+      "verdict": "unlikely",
+      "score": 0,
+      "evidence": "core/health.py:96–127. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/core/health.py))",
+      "reason": "The presence of a database lookup does not make this an IDOR: none of its object selectors come from the request.",
+      "fix": ""
+    },
+    {
+      "id": "R47",
+      "method": "GET",
+      "path": "/live",
+      "handler": "core/health.py:131 liveness_check",
+      "execution_path": [
+        "liveness_check",
+        "constant response"
+      ],
+      "object": "",
+      "data_access": "",
+      "auth_checks": "No caller-selected object.",
+      "verdict": "unlikely",
+      "score": 0,
+      "evidence": "core/health.py:130–137. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/core/health.py))",
+      "reason": "Returns process liveness without loading tenant data.",
+      "fix": ""
+    },
+    {
+      "id": "R48",
+      "method": "GET",
+      "path": "/custom/whoami",
+      "handler": "examples/custom_routes_example.py:47 whoami",
+      "execution_path": [
+        "require_auth",
+        "whoami",
+        "current user attributes"
+      ],
+      "object": "",
+      "data_access": "Reads attributes of the current principal.",
+      "auth_checks": "The principal comes from the authentication dependency.",
+      "verdict": "unlikely",
+      "score": 0,
+      "evidence": "aegra.json:11–13; examples/custom_routes_example.py:46–62. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/aegra.json))",
+      "reason": "There is no parameter for selecting another profile.",
+      "fix": ""
+    },
+    {
+      "id": "R49",
+      "method": "GET",
+      "path": "/custom/public",
+      "handler": "examples/custom_routes_example.py:65 public_endpoint",
+      "execution_path": [
+        "public_endpoint",
+        "constant response"
+      ],
+      "object": "",
+      "data_access": "",
+      "auth_checks": "Public example; no selected resource.",
+      "verdict": "unlikely",
+      "score": 0,
+      "evidence": "examples/custom_routes_example.py:64–74. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/examples/custom_routes_example.py))",
+      "reason": "The handler returns fixed text.",
+      "fix": ""
+    },
+    {
+      "id": "R50",
+      "method": "GET",
+      "path": "/custom/protected",
+      "handler": "examples/custom_routes_example.py:77 protected_endpoint",
+      "execution_path": [
+        "require_auth",
+        "protected_endpoint",
+        "current user attributes"
+      ],
+      "object": "",
+      "data_access": "Reads the current principal's identity and role.",
+      "auth_checks": "The principal comes from the authentication dependency.",
+      "verdict": "unlikely",
+      "score": 0,
+      "evidence": "examples/custom_routes_example.py:76–87. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/examples/custom_routes_example.py))",
+      "reason": "The caller cannot supply the identity whose attributes are returned.",
+      "fix": ""
+    },
+    {
+      "id": "R51",
+      "method": "GET",
+      "path": "/metrics",
+      "handler": "observability/metrics.py:43 setup_prometheus_metrics registers the library handler",
+      "execution_path": [
+        "setup_prometheus_metrics",
+        "conditional Instrumentator.expose",
+        "metrics registry"
+      ],
+      "object": "",
+      "data_access": "Exposes the metrics registry when enabled.",
+      "auth_checks": "Intentionally outside application authentication; no caller-selected tenant object was identified.",
+      "verdict": "unlikely",
+      "score": 0,
+      "evidence": "observability/metrics.py:28–44; main.py:330. ([raw.githubusercontent.com](https://raw.githubusercontent.com/aegra/aegra/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd/libs/aegra-api/src/aegra_api/observability/metrics.py))",
+      "reason": "Public metrics exposure is a deployment concern, but it is not object-level authorization bypass under the requested definition.",
+      "fix": ""
+    }
+  ]
+}
