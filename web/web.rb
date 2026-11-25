@@ -2010,21 +2010,18 @@ __END__
         <% if cmp['reused'].to_i.positive? %><%= cmp['reused'] %> identical routes kept that scan's results instead of asking the LLM again.<% end %></p>
     <% end %>
     <div class="table-wrap"><table class="routes">
-      <tr><th>Route</th><th>Handler</th><th>Data access</th>
+      <tr><th>Route</th>
           <th title="The code the LLM reads for this route, from the trace">Context</th>
           <th title="Tokens of this route's code in the LLM prompt (estimated)">Context tokens</th>
           <th title="Tokens of the LLM's answer for this route (estimated)">Response tokens</th>
           <th title="This route's share of its LLM call's cost: its context, its share of the shared prompt, and its share of the answer">Cost</th>
           <th title="Sorted by score">Result</th><th data-nosort></th>
-          <th title="Trace time (mm:ss: how long the tracer spent on this route; indexing the repo, shared by all routes, isn't counted) and the model that answered. Click a cell for more. Sorts by trace time.">Extra data</th></tr>
+          <th title="LLM time (mm:ss: how long the LLM call that answered for this route took). Click a cell for the handler, its data access and the model. Sorts by LLM time.">Extra data</th></tr>
       <% routes.each_with_index do |r, i| f = by_route[r['route']]; l = f && f['llm']; job = jobs[i.to_s]
            c = f && latest[[f.dig('llm', 'scan') || s['_id'], r['route']]]; rc = c && route_cost(c, r['route']) %>
       <tr id="route-<%= i %>" data-i="<%= i %>">
         <td class="mono"><%= h r['route'] %>
           <% if cmp && r['change'] %><br><span class="chg chg-<%= h r['change'] %>"><%= { 'same' => 'identical', 'changed' => 'changed', 'new' => 'new' }[r['change']] %></span><% end %></td>
-        <td><%= h r['handler'] %><br><span class="muted"><%= h r['framework'] %><% if r['input'].any? %> · <%= h r['input'].join(', ') %><% end %>
-          · <%= r['methods'] %> methods, <%= r['files'] %> files</span></td>
-        <td class="mono"><% r['model_calls'].each do |m| %><%= h m %><br><% end %></td>
         <td data-v="<%= r['chars'] if r['chars'].to_i.positive? %>"><% if r['chars'].to_i.positive? %><button type="button" class="tok" data-part="code" aria-expanded="false"><%= num r['chars'] %> chars</button>
             <% else %><span class="muted">—</span><% end %></td>
         <td data-v="<%= l && l['context_tokens'] %>"><% if l %><button type="button" class="tok" data-part="context" aria-expanded="false"><%= num l['context_tokens'] %></button><% else %><span class="muted">—</span><% end %></td>
@@ -2051,18 +2048,18 @@ __END__
           <form class="inline" method="post" action="/scans/<%= h s['_id'] %>/routes/<%= i %>/run">
             <button class="run-btn" type="submit" <%= 'disabled' if job %>><%= f ? 'Run again' : 'Run' %></button></form>
         <% end %></td>
-        <td class="nowrap extra" data-v="<%= r['trace_seconds'] %>">
-          <% ts = r['trace_seconds'] && mmss(r['trace_seconds']); model = c && Pricing.split(c['model'])[1] %>
-          <details><summary><%= [ts || (model ? '—' : nil), model].compact.join(', ').then { |x| x.empty? ? '—' : h(x) } %></summary>
-            <div><span class="k">trace</span> <% if ts %><span class="mono"><%= ts %></span> <span class="muted">(<%= format('%.3fs', r['trace_seconds']) %>)</span><%
-                 else %><span class="muted" title="This scan was traced before trace times were recorded. A new scan has them.">not timed</span><% end %></div>
+        <td class="extra" data-v="<%= c && c['seconds'] %>">
+          <details><summary><%= c && c['seconds'] ? mmss(c['seconds']) : '—' %></summary>
+            <div><span class="k">handler</span> <%= h r['handler'] %><br><span class="muted"><%= h r['framework'] %><% if r['input'].any? %> · <%= h r['input'].join(', ') %><% end %>
+              · <%= r['methods'] %> methods, <%= r['files'] %> files</span></div>
+            <% if r['model_calls'].any? %><div><span class="k">data access</span><br><span class="mono"><% r['model_calls'].each do |m| %><%= h m %><br><% end %></span></div><% end %>
             <div><span class="k">model</span> <% if c %><span class="mono"><%= h c['model'] %></span><% else %><span class="muted">not analyzed yet</span><% end %></div>
             <% if c && c['seconds'] %><div><span class="k">LLM</span> <span class="mono"><%= mmss(c['seconds']) %></span>
               <span class="muted">(the whole call<%= c['routes'].to_a.size > 1 ? " of #{c['routes'].size} routes" : '' %>)</span></div><% end %>
             <% if f && f['analyzed_at'] %><div><span class="k">at</span> <%= when_s f['analyzed_at'] %></div><% end %>
           </details></td>
       </tr>
-      <tr class="llm-row" hidden><td colspan="10"><div class="llm-box"></div></td></tr>
+      <tr class="llm-row" hidden><td colspan="8"><div class="llm-box"></div></td></tr>
       <% end %>
     </table></div>
     <p class="muted fine-note">Click a count to see the text. <b>Context</b> is the code the LLM reads for the route, kept from the trace.
