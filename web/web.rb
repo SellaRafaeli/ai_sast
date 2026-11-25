@@ -795,7 +795,22 @@ def public_path?(path)
   PUBLIC_PATHS.include?(path) || PUBLIC_PREFIXES.any? { |pre| path.start_with?(pre) }
 end
 
+# Local development shortcut: with SELLA=true, every request is signed in as DEV_SIGNIN_EMAIL, no Google needed.
+# Never in production: it's ignored when RACK_ENV or APP_ENV is "production", or on Heroku (which sets DYNO).
+PRODUCTION = [ENV["RACK_ENV"], ENV["APP_ENV"]].include?("production") || ENV.key?("DYNO")
+DEV_SIGNIN_EMAIL = "sella.rafaeli@gmail.com"
+DEV_SIGNIN = if ENV["SELLA"] == "true" && !PRODUCTION
+               known = USERS.find(_id: DEV_SIGNIN_EMAIL).first || {} # name and picture from a real sign-in, if any
+               { "email" => DEV_SIGNIN_EMAIL, "name" => known["name"] || DEV_SIGNIN_EMAIL, "picture" => known["picture"] }
+             end
+if DEV_SIGNIN
+  warn "[auth] SELLA=true: every request is signed in as #{DEV_SIGNIN_EMAIL} (local development only)"
+elsif ENV["SELLA"] == "true"
+  warn "[auth] SELLA=true is ignored: this is production"
+end
+
 before do
+  session[:user] = DEV_SIGNIN if DEV_SIGNIN && session[:user] != DEV_SIGNIN
   if AUTH_ON && !session[:user] && !public_path?(request.path_info)
     session[:return_to] = request.fullpath if request.get?
     session[:login_required] = request.get? ? request.path_info : "" # the sign-in page says what they tried to open

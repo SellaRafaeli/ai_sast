@@ -153,6 +153,7 @@ Changes can take a few minutes to apply. A `redirect_uri_mismatch` error from Go
 | `POSTMARK_FROM` | Sender address. It must be a confirmed sender signature or domain in your Postmark account. | `sella@indydevs.com` |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth client. With both set, every page needs a Google sign-in. | off |
 | `SESSION_SECRET` | Signs the sign-in cookie. Without it, everyone is signed out on each restart. | random |
+| `SELLA` | `true` signs every request in as the owner's account (`DEV_SIGNIN_EMAIL` in `web.rb`), with no Google sign-in. For local development only: it's ignored in production (`RACK_ENV` or `APP_ENV` set to `production`, or on Heroku, which sets `DYNO`), and the server log says which applies. | off |
 | `ALLOWED_DOMAINS` | Only Google accounts with these email domains may sign in, comma-separated | any |
 | `ALLOWED_EMAILS` | Only these Google accounts may sign in, comma-separated (combined with `ALLOWED_DOMAINS`) | any |
 | `ADMIN_EMAILS` | These accounts see every user's scans, comma-separated | `sella.rafaeli@gmail.com` |
