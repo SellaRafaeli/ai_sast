@@ -164,7 +164,27 @@ Changes can take a few minutes to apply. A `redirect_uri_mismatch` error from Go
 
 ## What's stored
 
-One document per scan in the `scans` collection: the repo URL and commit, status, timings, the log, a summary of each route (handler, input, data-access calls), the call trees, a timeline of events, and the LLM findings (score, verdict, reason, evidence and fix per route). Between the trace and the analysis, the full trace (with each route's code) is kept compressed in the `scan_traces` collection; it's deleted once the analysis succeeds. The scripts' own working data (`defs`, `routes`, `traces`, `findings` for the clone) is deleted after each step.
+One document per scan in the `scans` collection: the repo URL and commit, status, timings, the log, a summary of each route (handler, input, data-access calls, context size and a SHA-256 of its context), the call trees, a timeline of events, and the LLM findings (score, verdict, reason, evidence and fix per route). Each route's context (the code the LLM reads for it) is kept for good in `scan_routes`, one document per route. Scans made before that kept the whole trace compressed in `scan_traces` instead. Each LLM call is kept in `scan_llm_calls` (`analyze_bola.rb --calls`): its full prompt and answer, the input and output tokens the provider billed, and each route's part of both. The scripts' own working data (`defs`, `routes`, `traces`, `findings` for the clone) is deleted after each step.
+
+### The routes table
+
+On the scan page, **All traced routes** shows, for each route:
+
+- **Context:** its size in characters, right after the trace. Click it to read the code.
+- **Context tokens** and **Response tokens:** once the route has been analyzed. Click to read what was sent and what came back, with the call's exact billed tokens and its full prompt or answer. Per-route counts are estimates, since a call covers up to `ANALYZE_BATCH` routes and is billed as a whole.
+- **Model** and **Cost:** the model that answered and the route's share of its call's cost. That share is its context, an even share of the prompt the call's routes share, and its share of the answer, hidden reasoning included. Hover over a cost for the breakdown. The scan's total LLM cost is in the stats row.
+- **identical / changed / new:** compared with the previous scan of the same repo (any version) by the same person.
+- **Run / Run again:** asks the LLM about that one route on its own and replaces its result. You can repeat it as often as you like. The log shows each request before it's sent (model, routes, size, start of the prompt) and the prompt and response tokens once the answer is back.
+
+Identical routes keep the previous scan's results, so **Run the analysis** sends only changed and new routes (and any without a result). If every route is identical, the scan finishes with no LLM calls.
+
+### Token prices
+
+At boot, and once a day after, the server fetches token prices from two public lists ([`pricing.rb`](../pricing.rb)). OpenRouter's model list picks the newest 50 Anthropic and OpenAI models. LiteLLM's price list gives exact prices by API model id, including cached input, and fills in when OpenRouter lists fewer. The model the server is set to use is always included. The prices are kept in memory and saved in `meta` (`_id: "pricing"`), so a restart without network still has them. Admins can see them at `/admin/pricing`.
+
+### Cancel
+
+The scans list and the scan page mark each scan with something running (**Active**) or waiting in the queue (**Pending**), with a **Cancel** button. It stops the trace (the scan ends as Canceled), the analysis (back to Ready to analyze) and any single-route runs.
 
 ## Emails
 

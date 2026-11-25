@@ -49,7 +49,12 @@ module LLM
   def describe = available? ? "#{provider} / #{model}" : "no LLM key (set ANTHROPIC_API_KEY or OPEN_AI_API_KEY in .env)"
 
   # Send one prompt, get the text answer. Retries rate limits / overloads / 5xx a few times.
-  def ask(prompt, system: nil, max_tokens: 4000)
+  def ask(prompt, system: nil, max_tokens: 4000) = chat(prompt, system: system, max_tokens: max_tokens)[:text]
+
+  # Like ask, but also returns the tokens the provider billed for the call:
+  #   { text:, input_tokens:, output_tokens:, cache_read_tokens:, cache_write_tokens:, reasoning_tokens: }
+  # input_tokens counts every input token (cached or not); output_tokens includes hidden thinking/reasoning.
+  def chat(prompt, system: nil, max_tokens: 4000)
     raise Error, describe unless available?
     attempts = 0
     begin
@@ -69,7 +74,11 @@ module LLM
     body[:system] = system if system
     res = post("#{base}/v1/messages", body,
                "x-api-key" => anthropic_key, "anthropic-version" => "2023-06-01")
-    res.fetch("content", []).select { |b| b["type"] == "text" }.map { |b| b["text"] }.join
+    u = res["usage"] || {}
+    cache_read, cache_write = u["cache_read_input_tokens"].to_i, u["cache_creation_input_tokens"].to_i
+    { text: res.fetch("content", []).select { |b| b["type"] == "text" }.map { |b| b["text"] }.join,
+      input_tokens: u["input_tokens"].to_i + cache_read + cache_write, output_tokens: u["output_tokens"].to_i,
+      cache_read_tokens: cache_read, cache_write_tokens: cache_write, reasoning_tokens: nil }
   end
 
   def ask_openai(prompt, system, max_tokens)
@@ -80,7 +89,11 @@ module LLM
     # Reasoning models count hidden reasoning toward this limit, so give them room.
     body = { model: model, messages: messages, max_completion_tokens: max_tokens * 4 }
     res = post("#{base}/chat/completions", body, "authorization" => "Bearer #{openai_key}")
-    res.dig("choices", 0, "message", "content").to_s
+    u = res["usage"] || {}
+    { text: res.dig("choices", 0, "message", "content").to_s,
+      input_tokens: u["prompt_tokens"].to_i, output_tokens: u["completion_tokens"].to_i,
+      cache_read_tokens: u.dig("prompt_tokens_details", "cached_tokens").to_i, cache_write_tokens: 0,
+      reasoning_tokens: u.dig("completion_tokens_details", "reasoning_tokens") }
   end
 
   def post(url, body, headers)

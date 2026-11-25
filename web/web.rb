@@ -43,6 +43,7 @@ require "zlib"
 require "digest"
 require "net/http"
 require_relative "../llm"
+require_relative "../pricing"
 
 Encoding.default_external = Encoding::UTF_8 # trace files and logs are UTF-8 even under a C/ASCII locale
 LLM.load_dotenv
@@ -62,7 +63,11 @@ NOTIFY_EMAIL  = ENV.fetch("NOTIFY_EMAIL", "sella.rafaeli@gmail.com")
 POSTMARK_FROM = ENV.fetch("POSTMARK_FROM", "sella@indydevs.com")
 MAX_TRACE_BYTES = 15_000_000 # compressed trace kept for the analysis must fit in one Mongo document
 FRAMEWORKS    = %w[Rails Sinatra Flask FastAPI Django Express Koa Fastify NestJS].freeze
-FINDING_KEYS  = %w[rank score verdict route handler framework object data_access auth_checks evidence reason fix].freeze
+FINDING_KEYS  = %w[rank score verdict route handler framework object data_access auth_checks evidence reason fix llm
+                   reused_from analyzed_at].freeze
+VERDICT_ORDER = { "likely" => 0, "possible" => 1, "unlikely" => 2, "error" => 3 }.freeze
+# The repo the scan form starts with: Aegra at the v0.9.6 commit, which has known BOLAs (CVE-2026-44504).
+DEFAULT_SCAN_URL = "https://github.com/aegra/aegra/commit/d7d80c850010a9c5a3d2be59254c19b9eb0e25dd"
 
 # Why the LLM step won't run, or nil when it will.
 def analysis_off_reason
@@ -85,12 +90,72 @@ SCANS     = DB[:scans]
 SCANS.indexes.create_one(created_at: -1)
 TRACES    = DB[:scan_traces] # { _id: scan id, data: zlib-compressed trace.json } until the analysis runs
 JOBS      = Queue.new        # [:trace, id] or [:analyze, id]
+# One document per LLM call of an analysis: its full prompt and answer, billed tokens, and each route's part of both
+# ({ _id: "<scan id>:<call #>", scan_id:, index:, input_tokens:, output_tokens:, prompt:, response:, routes: [...] }).
+LLM_CALLS = DB[:scan_llm_calls]
+LLM_CALLS.indexes.create_one(scan_id: 1)
+# One document per traced route, kept for good: the code the LLM reads for it (its "context"), so the scan page can
+# show it, single routes can be analyzed again, and a later scan of the repo can tell which routes changed.
+# { _id: "<scan id>:<i>", scan_id:, i:, route:, handler:, framework:, input:, repo:, context: }
+SCAN_ROUTES = DB[:scan_routes]
+SCAN_ROUTES.indexes.create_one(scan_id: 1, i: 1)
+MAX_CONTEXT_CHARS = 4_000_000 # per route, well under Mongo's 16 MB document limit
+# Token prices of the newest Anthropic and OpenAI models (pricing.rb): the copy saved in `meta` right away, then a fresh
+# one from the web in the background, and once a day after. The model this server is set to use is always included.
+Pricing.load(DB[:meta], extra_models: LLM.available? ? [[LLM.provider.to_s, LLM.model]] : [])
+
+# What one LLM call (a scan_llm_calls document) cost, in dollars; nil when its model has no price.
+def call_cost(c)
+  prov, model = Pricing.split(c["model"])
+  Pricing.cost(prov, model, input: c["input_tokens"], output: c["output_tokens"],
+                            cache_read: c["cache_read_tokens"], cache_write: c["cache_write_tokens"])
+end
+
+# One route's share of its call's cost: its own context, plus an even share of the prompt the call's routes share
+# (system prompt and instructions), plus its share of the answer (all of it, hidden reasoning included, when the call
+# had one route). Cached input is priced at the cached rate. nil when the model has no price.
+def route_cost(c, route)
+  prov, model = Pricing.split(c["model"])
+  price = Pricing.find(prov, model) or return nil
+  parts = c["routes"] || []
+  part = parts.find { |x| x["route"] == route } or return nil
+  k = parts.size
+  input, output = c["input_tokens"].to_i, c["output_tokens"].to_i
+  shared = [input - parts.sum { |x| x["context_tokens"].to_i }, 0].max
+  in_share = input.positive? ? (part["context_tokens"].to_i + shared.to_f / k) / input : 1.0 / k
+  resp_sum = parts.sum { |x| x["response_tokens"].to_i }
+  out_share = resp_sum.positive? ? part["response_tokens"].to_f / resp_sum : 1.0 / k
+  in_cost = call_cost(c.merge("output_tokens" => 0)) * in_share
+  out_cost = output * price["output"] * out_share
+  { "model" => model, "provider" => prov, "price" => price, "total" => in_cost + out_cost, "input_cost" => in_cost,
+    "output_cost" => out_cost, "context_tokens" => part["context_tokens"].to_i, "shared_tokens" => (shared.to_f / k).round,
+    "output_tokens" => (output * out_share).round, "cached_tokens" => (c["cache_read_tokens"].to_i * in_share).round,
+    "reasoning_tokens" => c["reasoning_tokens"] && (c["reasoning_tokens"].to_i * out_share).round, "call_routes" => k }
+end
+
+def money(x) = x.nil? ? "—" : x < 1 ? format("$%.4f", x) : format("$%.2f", x)
+def per_million(p) = format("$%g", (p * 1_000_000).round(4)) # 1.25e-06 -> "$1.25" (per million tokens)
+
+# Cancelling: the cancel button flags the scan, and the job running for it stops at its next check.
+class Canceled < StandardError; end
+CANCEL      = {} # scan id => true
+CANCEL_LOCK = Mutex.new
+def cancel_requested?(id) = CANCEL_LOCK.synchronize { CANCEL[id] }
+def set_cancel(id, on) = CANCEL_LOCK.synchronize { on ? CANCEL[id] = true : CANCEL.delete(id) }
+RUNNING = {} # the job the (single) worker is running: { id:, kind:, i: }
 
 # "https://github.com/OWASP/railsgoat" -> ["OWASP/railsgoat", "github.com"]
 def repo_name(url)
   r = parse_repo_url(url)
   return [url.to_s, ""] if r[:path].empty?
-  ["#{r[:path].join('/')}#{r[:ref] ? " @ #{r[:ref]}" : ''}", r[:host]]
+  ref = r[:ref]&.match?(/\A\h{40}\z/) ? r[:ref][0, 10] : r[:ref] # a commit: its short id
+  ["#{r[:path].join('/')}#{ref ? " @ #{ref}" : ''}", r[:host]]
+end
+
+# The repo itself, whatever version the URL names: "github.com/aegra/aegra". Scans of one repo share it.
+def repo_key(url)
+  r = parse_repo_url(url)
+  "#{r[:host].delete_prefix('www.')}/#{r[:path].join('/')}".downcase
 end
 
 # ─────────────────────────── events and emails ───────────────────────────
@@ -165,10 +230,17 @@ def run(id, env, cmd, chdir:, timeout:)
   pending = +""
   last_flush = Time.now
   status = nil
+  canceled = false
   Open3.popen2e(env, *cmd, chdir: chdir, pgroup: true) do |stdin, io, wait|
     stdin.close
     deadline = Time.now + timeout
     loop do
+      if cancel_requested?(id)
+        Process.kill("KILL", -wait.pid) rescue nil
+        pending << "\n[canceled] stopped\n"
+        canceled = true
+        break
+      end
       if Time.now > deadline
         Process.kill("KILL", -wait.pid) rescue nil
         pending << "\n[timeout] stopped after #{timeout}s\n"
@@ -193,6 +265,7 @@ def run(id, env, cmd, chdir:, timeout:)
     status = wait.value
   end
   append_log(id, pending) unless pending.empty?
+  raise Canceled, "canceled" if canceled
   [status&.success? || false, out]
 end
 
@@ -253,7 +326,7 @@ def archive_url(url)
 end
 
 # Download `url` to `file`, following redirects, giving up past `max_bytes` or `timeout` seconds.
-def download(url, file, max_bytes:, timeout:)
+def download(url, file, max_bytes:, timeout:, cancel_id: nil)
   deadline = Time.now + timeout
   5.times do
     uri = URI.parse(url)
@@ -269,6 +342,7 @@ def download(url, file, max_bytes:, timeout:)
               bytes += chunk.bytesize
               raise format("repo archive is over %d MB", max_bytes / 1_048_576) if bytes > max_bytes
               raise "download took longer than #{timeout}s" if Time.now > deadline
+              raise Canceled, "canceled" if cancel_id && cancel_requested?(cancel_id)
               f.write(chunk)
             end
           end
@@ -289,7 +363,7 @@ def fetch_repo(id, env, url, work, repo_dir)
   if (archive = archive_url(url))
     file = File.join(work, "repo.tar.gz")
     append_log(id, "$ download #{archive}\n")
-    bytes = download(archive, file, max_bytes: MAX_REPO_MB * 1_048_576, timeout: CLONE_TIMEOUT)
+    bytes = download(archive, file, max_bytes: MAX_REPO_MB * 1_048_576, timeout: CLONE_TIMEOUT, cancel_id: id)
     append_log(id, format("downloaded %.1f MB\n", bytes / 1_048_576.0))
     # git-made archives (GitHub, GitLab) record the commit in their first header: "comment=<sha>"
     head = Zlib::GzipReader.open(file) { |gz| gz.read(2048) }.to_s rescue ""
@@ -362,30 +436,55 @@ def scan(id)
     "#{lang} files were skipped: this server is missing #{tool}, so routes in those files aren't included."
   end
 
+  # Keep each route's context (the code the LLM will read) for the page, the analysis and later scans.
+  SCAN_ROUTES.delete_many(scan_id: id)
+  traces.each_with_index.map do |t, i|
+    text = t["source_text"].to_s
+    text = text[0, MAX_CONTEXT_CHARS] + "\n... (cut: too long to store)\n" if text.size > MAX_CONTEXT_CHARS
+    { _id: "#{id}:#{i}", scan_id: id, i: i, route: t["route"], handler: t["handler"], framework: t["framework"],
+      input: t["input"] || [], repo: t["repo"], context: text }
+  end.each_slice(50) { |docs| SCAN_ROUTES.insert_many(docs) }
+  routes = traces.map do |t|
+    route_summary(t).merge("chars" => t["source_text"].to_s.size, "digest" => Digest::SHA256.hexdigest(t["source_text"].to_s))
+  end
+
+  # Compare each route's context with the last scan of this repo: identical routes keep that scan's results.
+  doc["repo_key"] ||= repo_key(doc["repo_url"])
+  compare, reused = compare_with_previous(doc, routes)
+
   frameworks = traces.map { |t| t["framework"] }.tally
-  update(id, "routes" => traces.map { |t| route_summary(t) }, "route_count" => traces.size, "tree" => tree,
-             "frameworks" => frameworks, "clone_path" => repo_dir, "finished_at" => Time.now.utc, "warnings" => warnings)
+  update(id, "routes" => routes, "route_count" => traces.size, "tree" => tree, "repo_key" => doc["repo_key"],
+             "frameworks" => frameworks, "clone_path" => repo_dir, "finished_at" => Time.now.utc, "warnings" => warnings,
+             "compare" => compare)
   fw = frameworks.map { |k, v| "#{v} #{k}" }.join(", ")
   summary = "Traced #{traces.size} routes#{fw.empty? ? '' : " (#{fw})"} at commit #{commit[0, 10]}." +
+            (compare ? "\nCompared with the scan of #{compare['at'].utc.strftime('%b %-d, %H:%M UTC')}: #{compare['same']} " \
+                       "identical, #{compare['changed']} changed, #{compare['new']} new, #{compare['removed']} removed." : "") +
             warnings.map { |w| "\nWarning: #{w}" }.join
+  save_findings(id, reused) if reused.any?
+  todo = routes.count { |r| r["chars"].positive? } - reused.size # routes that still need the LLM
 
-  # Keep the trace (with each route's code) for the analysis step, which waits for a click.
   reason = analysis_off_reason
-  data = Zlib::Deflate.deflate(File.binread(trace_json), Zlib::BEST_COMPRESSION)
   if traces.empty?
     update(id, "status" => "done", "analysis_note" => "No routes that take input, so there is nothing to analyze.")
     event(id, "Trace done: no routes found", summary)
+  elsif todo.zero?
+    note = reused.any? ? "All #{reused.size} routes are identical to the previous scan of this repo, so its results were reused: no LLM calls were needed." :
+                         "No route has code the LLM could read, so there is nothing to analyze."
+    update(id, "status" => "done", "analysis_note" => note)
+    event(id, "Trace done: #{traces.size} routes, nothing changed", "#{summary}\n#{note}")
   elsif reason
     update(id, "status" => "done", "analysis_note" => "The LLM analysis isn't available: #{reason}. Showing the traced routes only.")
     event(id, "Trace done: #{traces.size} routes", "#{summary}\nThe LLM analysis isn't available: #{reason}.")
-  elsif data.bytesize > MAX_TRACE_BYTES
-    update(id, "status" => "done", "analysis_note" => "This trace is too big to keep for the LLM analysis. Showing the traced routes only.")
-    event(id, "Trace done: #{traces.size} routes", "#{summary}\nToo big to keep for the LLM analysis.")
   else
-    TRACES.replace_one({ _id: id }, { _id: id, data: BSON::Binary.new(data) }, upsert: true)
     update(id, "status" => "traced")
-    event(id, "Trace done: #{traces.size} routes, ready to analyze", "#{summary}\nOpen the scan page and click \"Run the analysis\" to score the routes with the LLM.")
+    event(id, "Trace done: #{todo} routes ready to analyze",
+          "#{summary}#{reused.any? ? "\n#{reused.size} unchanged routes kept their results." : ''}\n" \
+          "Open the scan page and click \"Run the analysis\" to score the routes with the LLM.")
   end
+rescue Canceled
+  append_log(id, "\n[canceled]\n") rescue nil
+  update(id, "status" => "canceled", "finished_at" => Time.now.utc)
 rescue => e
   append_log(id, "\n[error] #{e.message}\n") rescue nil
   update(id, "status" => "failed", "error" => e.message, "finished_at" => Time.now.utc)
@@ -411,52 +510,186 @@ rescue => e
   warn "[partial] #{e.class}: #{e.message}"
 end
 
-# 3. ANALYZE: the LLM scores each traced route, from the trace kept in `scan_traces`.
-def analyze(id)
-  doc = SCANS.find(_id: id).first or return
-  work = Dir.mktmpdir("analyze-")
-  update(id, "status" => "analyzing", "model" => LLM.describe, "analysis_started_at" => Time.now.utc, "analysis_error" => nil,
-             "partial_findings" => [], "partial_count" => 0)
-  event(id, "Analysis started", send_email: false)
-  saved = TRACES.find(_id: id).first or raise "the saved trace is gone; please scan the repo again"
+# Copy the LLM calls written so far (one JSON line each) into LLM_CALLS, from line `saved` on; returns the new count.
+# A half-written last line is left for the next pass. Upserts by run and call number, so copying a call twice is harmless.
+def save_calls(id, run_tag, file, saved)
+  return saved unless File.file?(file)
+  File.readlines(file, chomp: true)[saved..].to_a.each do |line|
+    c = (JSON.parse(line) rescue nil) or break
+    key = "#{id}:#{run_tag}:#{c['index']}"
+    LLM_CALLS.replace_one({ _id: key }, c.merge("_id" => key, "scan_id" => id, "run" => run_tag, "at" => Time.now.utc), upsert: true)
+    saved += 1
+  end
+  saved
+rescue => e
+  warn "[calls] #{e.class}: #{e.message}"
+  saved
+end
+
+# Tokens this scan has spent on the LLM, over all its runs: { "input" =>, "output" =>, "calls" => } or nil.
+def llm_usage(id)
+  LLM_CALLS.aggregate([{ "$match" => { scan_id: id } },
+                       { "$group" => { _id: nil, input: { "$sum" => "$input_tokens" }, output: { "$sum" => "$output_tokens" },
+                                       calls: { "$sum" => 1 } } }]).first
+end
+
+# Rank the findings (highest score first), tally them, and save them on the scan with any other `fields`.
+def save_findings(id, findings, fields = {})
+  ranked = findings.sort_by { |f| [-(f["score"] || -1).to_i, VERDICT_ORDER.fetch(f["verdict"], 4), f["route"].to_s] }
+                   .each_with_index.map { |f, i| f.merge("rank" => i + 1) }
+  top = ranked.find { |f| %w[likely possible].include?(f["verdict"]) }&.slice("route", "score", "verdict")
+  update(id, { "findings" => ranked, "verdicts" => ranked.map { |f| f["verdict"] }.tally, "top_finding" => top }.merge(fields))
+  ranked
+end
+
+# The latest earlier scan of the same repo (any version), by the same person, whose route contexts were kept.
+def previous_scan(doc)
+  q = { "_id" => { "$ne" => doc["_id"] }, "repo_key" => doc["repo_key"], "created_at" => { "$lt" => doc["created_at"] },
+        "routes.digest" => { "$exists" => true } }
+  q["requested_by.email"] = doc["requested_by"]["email"] if doc["requested_by"]
+  SCANS.find(q).sort(created_at: -1).limit(1).projection(routes: 1, findings: 1, created_at: 1, commit: 1).first
+end
+
+# Mark each route same / changed / new against the previous scan (in place), and take that scan's results for the
+# identical ones. Returns [comparison summary or nil, reused findings].
+def compare_with_previous(doc, routes)
+  prev = previous_scan(doc) or return [nil, []]
+  old = (prev["routes"] || []).to_h { |r| [r["route"], r["digest"]] }
+  old_findings = (prev["findings"] || []).to_h { |f| [f["route"], f] }
+  reused = []
+  routes.each do |r|
+    r["change"] = !old.key?(r["route"]) ? "new" : old[r["route"]] == r["digest"] ? "same" : "changed"
+    f = old_findings[r["route"]]
+    next unless r["change"] == "same" && f && f["verdict"] != "error"
+    # keep pointing at the scan whose LLM call produced it, so its texts can still be opened
+    reused << f.merge("reused_from" => prev["_id"], "llm" => f["llm"] && { "scan" => prev["_id"] }.merge(f["llm"]))
+  end
+  counts = routes.map { |r| r["change"] }.tally
+  [{ "scan" => prev["_id"], "at" => prev["created_at"], "commit" => prev["commit"], "same" => counts["same"].to_i,
+     "changed" => counts["changed"].to_i, "new" => counts["new"].to_i,
+     "removed" => (old.keys - routes.map { |r| r["route"] }).size, "reused" => reused.size }, reused]
+end
+
+# The traced routes with their code, as analyze_bola.rb reads them, each with its index "i": from `scan_routes`, or
+# the compressed trace of scans made before route contexts were kept. nil when neither is there.
+def load_traces(id)
+  docs = SCAN_ROUTES.find(scan_id: id).sort(i: 1).to_a
+  if docs.any?
+    docs.map do |d|
+      { "i" => d["i"], "route" => d["route"], "handler" => d["handler"], "framework" => d["framework"],
+        "input" => d["input"], "repo" => d["repo"], "source_text" => d["context"] }
+    end
+  elsif (saved = TRACES.find(_id: id).first)
+    JSON.parse(Zlib::Inflate.inflate(saved["data"].data)).each_with_index.map { |t, i| t.merge("i" => i) }
+  end
+end
+
+def trace_kept?(id) = !!(SCAN_ROUTES.find(scan_id: id).limit(1).first || TRACES.find(_id: id).first)
+
+# Run analyze_bola.rb on these routes and return its report. Each LLM call is saved to LLM_CALLS as it finishes
+# (even when the run fails or is canceled: those tokens were spent); with live: true, verdicts reach the page as well.
+def run_analyzer(id, traces, work, batch:, live: false)
   trace_json = File.join(work, "trace.json")
-  File.binwrite(trace_json, Zlib::Inflate.inflate(saved["data"].data))
+  File.write(trace_json, JSON.generate(traces))
   report = File.join(work, "bola_report")
-  # analyze_bola.rb appends each batch's verdicts to this file as soon as the batch finishes; copy them into the
-  # scan every 2 seconds so the page can show results while the rest are still being reviewed.
   partial = File.join(work, "partial.jsonl")
+  calls = File.join(work, "calls.jsonl")
+  tag = SecureRandom.hex(4)
+  saved = 0
   watcher = Thread.new do
     loop do
       sleep 2
-      save_partial(id, partial)
+      saved = save_calls(id, tag, calls, saved) # before the verdicts, so a route shown as done has its texts
+      save_partial(id, partial) if live
     end
   end
   ok, = run(id, { "MONGO_URL" => MONGO_URL },
-            ruby_script("analyze_bola.rb", trace_json, "--out", report, "--batch", ANALYZE_BATCH.to_s,
-                        "--jobs", ANALYZE_JOBS.to_s, "--partial", partial),
+            ruby_script("analyze_bola.rb", trace_json, "--out", report, "--batch", batch.to_s,
+                        "--jobs", ANALYZE_JOBS.to_s, "--partial", partial, "--calls", calls),
             chdir: work, timeout: ANALYZE_TIMEOUT)
-  watcher.kill
   raise "the analysis failed (see the log)" unless ok && File.file?("#{report}.json")
+  JSON.parse(File.read("#{report}.json"))
+ensure
+  watcher&.kill
+  save_calls(id, tag, calls, saved) if calls
+end
 
-  r = JSON.parse(File.read("#{report}.json"))
-  findings = r["routes"].map { |f| f.slice(*FINDING_KEYS) }
+# Routes of a scan that still need the LLM: they have code to read and no result yet (reused, or from a single run).
+def routes_to_analyze(scan)
+  have = (scan["findings"] || []).map { |f| f["route"] }
+  (scan["routes"] || []).reject { |r| r["chars"] == 0 || have.include?(r["route"]) }
+end
+
+# 3. ANALYZE: the LLM scores every route that has no result yet, from the contexts kept in `scan_routes`.
+def analyze(id)
+  doc = SCANS.find(_id: id).first or return
+  work = Dir.mktmpdir("analyze-")
+  update(id, "status" => "analyzing", "model" => LLM.describe, "analysis_started_at" => Time.now.utc, "analysis_finished_at" => nil,
+             "analysis_error" => nil, "partial_findings" => [], "partial_count" => 0)
+  traces = load_traces(id) or raise "the saved trace is gone; please scan the repo again"
+  todo_routes = routes_to_analyze(doc).map { |r| r["route"] }
+  todo = traces.select { |t| todo_routes.include?(t["route"]) }
+  kept = doc["findings"] || []
+  event(id, "Analysis started", "#{todo.size} routes to review#{kept.any? ? "; #{kept.size} already have results" : ''}.", send_email: false)
+  # analyze_bola.rb appends each batch's verdicts to a file as soon as the batch finishes; run_analyzer copies them
+  # into the scan every 2 seconds so the page can show results while the rest are still being reviewed.
+  r = todo.empty? ? { "routes" => [], "usage" => {}, "model" => LLM.describe } : run_analyzer(id, todo, work, batch: ANALYZE_BATCH, live: true)
+  fresh = r["routes"].map { |f| f.slice(*FINDING_KEYS).merge("analyzed_at" => Time.now.utc) }
+  now = SCANS.find(_id: id).projection(findings: 1).first["findings"] || []
+  findings = save_findings(id, now.reject { |f| fresh.any? { |x| x["route"] == f["route"] } } + fresh,
+                           "status" => "done", "model" => r["model"], "analysis_finished_at" => Time.now.utc, "partial_findings" => nil)
   verdicts = findings.map { |f| f["verdict"] }.tally
-  top_finding = findings.find { |f| %w[likely possible].include?(f["verdict"]) }&.slice("route", "score", "verdict")
-  update(id, "status" => "done", "findings" => findings, "model" => r["model"], "verdicts" => verdicts, "top_finding" => top_finding,
-             "analysis_finished_at" => Time.now.utc, "partial_findings" => nil)
-  TRACES.delete_one(_id: id)
   top = findings.select { |f| %w[likely possible].include?(f["verdict"]) }.first(10)
                 .map { |f| "  #{f['score']}  #{f['verdict'].ljust(8)} #{f['route']}" }
+  u = r["usage"] || {}
   event(id, "Analysis done: #{verdicts['likely'].to_i} likely, #{verdicts['possible'].to_i} possible BOLA",
-        "#{findings.size} routes scored by #{r['model']}.#{top.any? ? "\n\nTop flagged routes:\n#{top.join("\n")}" : ''}")
+        "#{fresh.size} routes scored by #{r['model']} in #{u['calls'].to_i} LLM calls " \
+        "(#{u['input_tokens'].to_i} input / #{u['output_tokens'].to_i} output tokens)" \
+        "#{findings.size > fresh.size ? "; #{findings.size - fresh.size} kept their earlier results" : ''}." \
+        "#{top.any? ? "\n\nTop flagged routes:\n#{top.join("\n")}" : ''}")
+rescue Canceled
+  append_log(id, "\n[canceled]\n") rescue nil
+  update(id, "status" => trace_kept?(id) ? "traced" : "failed", "partial_findings" => nil,
+             "analysis_error" => "The analysis was canceled.")
 rescue => e
   append_log(id, "\n[error] #{e.message}\n") rescue nil
   # The trace is still saved (unless it's gone), so the visitor can click again.
-  update(id, "status" => (TRACES.find(_id: id).first ? "traced" : "failed"), "analysis_error" => e.message, "error" => e.message)
+  update(id, "status" => (trace_kept?(id) ? "traced" : "failed"), "analysis_error" => e.message, "error" => e.message,
+             "partial_findings" => nil)
   event(id, "Analysis failed", e.message)
 ensure
   FileUtils.rm_rf(work) if work
   DB[:findings].delete_many(repo: doc["clone_path"]) if doc && doc["clone_path"] rescue nil # analyze_bola.rb's own copy
+end
+
+# One route, on its own: ask the LLM again and replace that route's result. Can be repeated any number of times.
+def analyze_route(id, i)
+  doc = SCANS.find(_id: id).first or return
+  SCANS.update_one({ _id: id }, { "$set" => { "route_jobs.#{i}" => "running", "route_started.#{i}" => Time.now.utc } })
+  t = load_traces(id)&.find { |x| x["i"] == i } or raise "this route's code is gone; please scan the repo again"
+  work = Dir.mktmpdir("route-")
+  append_log(id, "\n[route] analyzing #{t['route']} on its own\n")
+  r = run_analyzer(id, [t], work, batch: 1)
+  f = r["routes"].first&.slice(*FINDING_KEYS) or raise "the LLM returned no result for this route"
+  now = SCANS.find(_id: id).projection(findings: 1).first["findings"] || []
+  findings = save_findings(id, now.reject { |x| x["route"] == t["route"] } + [f.merge("analyzed_at" => Time.now.utc)],
+                           "model" => r["model"])
+  # A scan waiting for its analysis is done once every route has a result.
+  if SCANS.find(_id: id, status: "traced").first && routes_to_analyze(doc.merge("findings" => findings)).empty?
+    update(id, "status" => "done", "analysis_finished_at" => Time.now.utc)
+  end
+  u = r["usage"] || {}
+  event(id, "Route analyzed: #{t['route']}", "#{f['verdict']}, score #{f['score'] || '-'} " \
+                                             "(#{u['input_tokens'].to_i} input / #{u['output_tokens'].to_i} output tokens).", send_email: false)
+rescue Canceled
+  append_log(id, "\n[canceled]\n") rescue nil
+rescue => e
+  append_log(id, "\n[error] #{e.message}\n") rescue nil
+  SCANS.update_one({ _id: id }, { "$set" => { "route_errors.#{i}" => e.message[0, 300] } })
+ensure
+  SCANS.update_one({ _id: id }, { "$unset" => { "route_jobs.#{i}" => "", "route_started.#{i}" => "" } })
+  FileUtils.rm_rf(work) if work
+  DB[:findings].delete_many(repo: doc["clone_path"]) if doc && doc["clone_path"] rescue nil
 end
 
 # After a restart (Heroku restarts dynos daily) the queue is empty. A trace can't resume (its clone is
@@ -465,14 +698,30 @@ SCANS.update_many({ status: { "$in" => %w[queued cloning tracing] } },
                   { "$set" => { status: "failed", error: "the server restarted during the scan; please scan again" } })
 SCANS.update_many({ status: { "$in" => %w[analysis_queued analyzing] } },
                   { "$set" => { status: "traced", analysis_error: "the server restarted during the analysis; please run it again" } })
+SCANS.update_many({ route_jobs: { "$exists" => true } }, { "$unset" => { route_jobs: "", route_started: "" } })
 
+# One worker runs the jobs in order: [:trace, id], [:analyze, id], or [:route, id, i]. A job whose scan was
+# canceled while it waited is skipped.
 Thread.new do
   loop do
-    kind, id = JOBS.pop
+    kind, id, i = JOBS.pop
     begin
-      kind == :analyze ? analyze(id) : scan(id)
+      doc = SCANS.find(_id: id).projection(status: 1, route_jobs: 1).first
+      wanted = { trace: doc && doc["status"] == "queued", analyze: doc && doc["status"] == "analysis_queued",
+                 route: doc && doc.dig("route_jobs", i.to_s) == "queued" }[kind]
+      next unless wanted
+      set_cancel(id, false)
+      RUNNING.replace(id: id, kind: kind, i: i)
+      case kind
+      when :analyze then analyze(id)
+      when :route then analyze_route(id, i)
+      else scan(id)
+      end
     rescue => e
       warn "[worker] #{kind} #{id}: #{e.class}: #{e.message}"
+    ensure
+      RUNNING.clear
+      set_cancel(id, false)
     end
   end
 end
@@ -725,7 +974,7 @@ VISITS.indexes.create_one(visitor: 1, path: 1, created_at: -1)
 VISIT_EMAILS = ENV["VISIT_EMAILS"] != "0"
 VISIT_EMAIL_QUIET = Integer(ENV.fetch("VISIT_EMAIL_QUIET", "10")) # minutes
 BOT_UA = /bot|crawl|spider|slurp|preview|monitor|headless|curl|wget|python-requests|go-http|uptime|pingdom/i
-NO_VISIT = %r{\A/(__live|auth/|logout)|/live\z|\.json\z}
+NO_VISIT = %r{\A/(__live|auth/|logout)|/live\z|/route/\d+\z|\.json\z} # /route/<i>: texts opened from the routes table
 
 after do
   # pages only: Sinatra adds the default text/html type after this filter runs, so an unset type is a page too
@@ -835,6 +1084,13 @@ Thread.new do
 end
 
 # Admins: preview the last 24 hours' summary, or send it now (?send=1).
+# The token prices this server uses for costs (see pricing.rb), as JSON.
+get "/admin/pricing" do
+  halt 404 unless admin?
+  content_type :json
+  JSON.pretty_generate(Pricing.table || { "error" => "no prices yet: the first fetch hasn't finished or failed (see the server log)" })
+end
+
 get "/admin/daily-summary" do
   halt 404 unless admin?
   now = Time.now.utc
@@ -933,6 +1189,7 @@ helpers do
   def user_name(user) = user ? (user["name"] || user["email"]) : "anonymous"
   def when_s(t) = t ? t.utc.strftime("%b %-d, %H:%M UTC") : ""
   def present?(v) = !(v.nil? || (v.respond_to?(:empty?) && v.empty?))
+  def num(n) = n.to_i.to_s.reverse.scan(/\d{1,3}/).join(",").reverse.then { |t| n.to_i.negative? ? "-#{t}" : t } # 12345 -> "12,345"
 
   def duration(from, to)
     return "" unless from
@@ -943,7 +1200,8 @@ helpers do
   def analysis_took(scan) = duration(scan["analysis_started_at"], scan["analysis_finished_at"])
 
   STATUS_LABEL = { "queued" => "Waiting", "cloning" => "Cloning", "tracing" => "Tracing", "traced" => "Ready to analyze",
-                   "analysis_queued" => "Analysis waiting", "analyzing" => "Analyzing", "done" => "Done", "failed" => "Failed" }.freeze
+                   "analysis_queued" => "Analysis waiting", "analyzing" => "Analyzing", "done" => "Done", "failed" => "Failed",
+                   "canceled" => "Canceled" }.freeze
   def status_pill(status) = %(<span class="pill pill-#{h status}">#{h STATUS_LABEL.fetch(status, status)}</span>)
 
   # Stepper: which step is current (0 waiting .. 4 done)
@@ -951,12 +1209,25 @@ helpers do
     { "queued" => 0, "cloning" => 1, "tracing" => 2, "traced" => 3, "analysis_queued" => 3, "analyzing" => 3, "done" => 4 }.fetch(status, -1)
   end
 
-  def llm_calls(scan) = (scan["route_count"].to_i / 10.0).ceil
+  def llm_calls(routes) = (routes / ANALYZE_BATCH.to_f).ceil
 
-  # [batches done, total] while the LLM step runs, from analyze_bola.rb's log lines
+  # [batches done, total] while the LLM step runs, from analyze_bola.rb's log lines (of its latest run)
   def analysis_progress(log)
-    total = log.to_s[/\[batch\] (\d+) LLM calls/, 1]&.to_i
-    total && [log.to_s.scan(/\[ask\] batch \d+\//).size, total]
+    log = log.to_s
+    start = log.rindex("[batch] ") or return nil
+    total = log[start..][/\[batch\] (\d+) LLM calls/, 1]&.to_i
+    total && [log[start..].scan(/\[ask\] batch \d+\//).size, total]
+  end
+
+  # Whether the scan has something running now (:running) or waiting in the queue (:pending), or nil;
+  # with a short description of what.
+  def activity(scan)
+    st, jobs = scan["status"], (scan["route_jobs"] || {})
+    if %w[cloning tracing analyzing].include?(st) then [:running, STATUS_LABEL[st]]
+    elsif jobs.value?("running") then [:running, "Analyzing 1 route#{jobs.size > 1 ? " (+#{jobs.size - 1} waiting)" : ''}"]
+    elsif %w[queued analysis_queued].include?(st) then [:pending, STATUS_LABEL[st]]
+    elsif jobs.any? then [:pending, "#{jobs.size} route#{jobs.size == 1 ? '' : 's'} waiting"]
+    end
   end
 
   def verdict_counts(scan) = scan["verdicts"] || (scan["findings"] || []).map { |f| f["verdict"] }.tally
@@ -993,7 +1264,7 @@ post "/scans" do
     redirect to("/?error=" + Rack::Utils.escape("Too many scans are waiting. Please try again in a few minutes."))
   end
   id = SecureRandom.hex(8)
-  SCANS.insert_one(_id: id, repo_url: url, status: "queued", created_at: Time.now.utc, log: "", events: [],
+  SCANS.insert_one(_id: id, repo_url: url, repo_key: repo_key(url), status: "queued", created_at: Time.now.utc, log: "", events: [],
                    base_url: request.base_url, # for links in the emails
                    requested_by: current_user)
   event(id, "Scan requested", "#{who} asked to scan #{url}. #{JOBS.size} scan(s) ahead of it.", by: current_user)
@@ -1009,12 +1280,42 @@ post "/scans/:id/analyze" do
     res = SCANS.update_one({ _id: scan["_id"], status: "traced" },
                            { "$set" => { status: "analysis_queued", analysis_requested_by: current_user } })
     if res.modified_count == 1
-      event(scan["_id"], "Analysis requested", "#{who} asked for the analysis: about #{llm_calls(scan)} LLM calls for " \
-                                               "#{scan['route_count']} routes.", by: current_user)
+      todo = routes_to_analyze(scan).size
+      event(scan["_id"], "Analysis requested", "#{who} asked for the analysis: about #{llm_calls(todo)} LLM calls for " \
+                                               "#{todo} routes.", by: current_user)
       JOBS << [:analyze, scan["_id"]]
     end
   end
   redirect to("/scans/#{scan['_id']}")
+end
+
+# Analyze one route on its own (again and again, if you like). It waits in the same queue as everything else.
+post "/scans/:id/routes/:i/run" do
+  scan = find_scan!(params[:id])
+  i = Integer(params[:i], exception: false)
+  ok = i && (r = (scan["routes"] || [])[i]) && r["chars"] != 0 && !analysis_off_reason && trace_kept?(scan["_id"])
+  if ok && JOBS.size < MAX_QUEUE && scan.dig("route_jobs", i.to_s).nil?
+    SCANS.update_one({ _id: scan["_id"] }, { "$set" => { "route_jobs.#{i}" => "queued" }, "$unset" => { "route_errors.#{i}" => "" } })
+    JOBS << [:route, scan["_id"], i]
+  end
+  redirect to("/scans/#{scan['_id']}#route-#{i}")
+end
+
+# Stop everything this scan has waiting or running: the trace, the analysis, single-route runs.
+post "/scans/:id/cancel" do
+  scan = find_scan!(params[:id])
+  id = scan["_id"]
+  waiting = SCANS.update_one({ _id: id, status: "queued" }, { "$set" => { status: "canceled", finished_at: Time.now.utc } }).modified_count +
+            SCANS.update_one({ _id: id, status: "analysis_queued" },
+                             { "$set" => { status: "traced", analysis_error: "The analysis was canceled." } }).modified_count
+  routes = (scan["route_jobs"] || {}).size
+  SCANS.update_one({ _id: id }, { "$unset" => { route_jobs: "" } }) if routes.positive?
+  running = RUNNING[:id] == id
+  set_cancel(id, true) if running # the running job stops at its next check (within a second or so)
+  if waiting.positive? || routes.positive? || running
+    event(id, "Canceled", "#{who} canceled what was waiting or running on this scan.", send_email: false, by: current_user)
+  end
+  redirect to(request.referer.to_s.start_with?(request.base_url) ? request.referer : "/scans/#{id}")
 end
 
 # Every scan, newest first, 50 per page.
@@ -1025,6 +1326,7 @@ get "/scans" do
                 .projection(log: 0, tree: 0, routes: 0, findings: 0, events: 0).to_a
   @pages = [(@total / 50.0).ceil, 1].max
   @title = admin? ? "All scans" : "My scans"
+  @wide = true
   erb :scans
 end
 
@@ -1041,12 +1343,34 @@ get "/scans/:id/live" do
   erb :live, layout: false
 end
 
+# What a click in the routes table opens, for route number `i`:
+#   part=code      its traced context, the code the LLM reads (kept from the trace on)
+#   part=context   its part of the latest LLM call's prompt, with the call's billed tokens and full prompt
+#   part=response  its part of that call's answer, with the full answer
+get "/scans/:id/route/:i" do
+  scan = find_scan!(params[:id])
+  i = Integer(params[:i], exception: false)
+  r = i && (scan["routes"] || [])[i] or halt(404, "No such route.")
+  if params[:part] == "code"
+    d = SCAN_ROUTES.find(_id: "#{scan['_id']}:#{i}").first or halt(404, "This scan didn't keep its routes' code.")
+    halt erb(:code_part, layout: false, locals: { d: d, r: r })
+  end
+  f = (scan["findings"] || scan["partial_findings"] || []).find { |x| x["route"] == r["route"] }
+  src = f&.dig("llm", "scan") || scan["_id"] # a reused result points at the scan whose LLM call made it
+  halt(404, "No such scan.") unless src == scan["_id"] || SCANS.find(visible_scans.merge(_id: src)).first
+  call = LLM_CALLS.find(scan_id: src, "routes.route" => r["route"]).sort(at: -1).first or halt(404, "No LLM call was recorded for this route.")
+  erb :llm_part, layout: false, locals: { call: call, r: call["routes"].find { |x| x["route"] == r["route"] },
+                                          part: params[:part] == "response" ? "response" : "context",
+                                          reused: src != scan["_id"] && f["reused_from"] }
+end
+
 get "/scans/:id" do
   @scan = find_scan!(params[:id])
-  @active = ACTIVE.include?(@scan["status"])
+  @active = ACTIVE.include?(@scan["status"]) || present?(@scan["route_jobs"])
   @live = %w[analysis_queued analyzing].include?(@scan["status"]) # results stream in; the page polls instead of reloading
   @ahead = @scan["status"] == "queued" ? SCANS.count_documents(status: "queued", created_at: { "$lt" => @scan["created_at"] }) : 0
   @title = repo_name(@scan["repo_url"]).first
+  @wide = true
   erb :scan
 end
 
@@ -1290,6 +1614,9 @@ __END__
 
   /* ── content ── */
   main { max-width: 1040px; margin: -32px auto 0; padding: 0 16px 72px; position: relative; z-index: 2; }
+  /* the scan page and the scans list use the whole window, for their wide tables */
+  body.wide main, body.wide .hero-inner { max-width: none; } body.wide main { padding: 0 24px 72px; }
+  body.wide .hero { padding-left: 24px; padding-right: 24px; }
   .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 20px; margin-bottom: 16px; }
   h2 { font-size: 20px; margin: 36px 0 12px; letter-spacing: -.01em; }
   h2 .count { color: var(--muted); font-weight: 500; }
@@ -1332,6 +1659,37 @@ __END__
   details[open] > summary::before { transform: rotate(90deg); }
   details[open] > summary { margin-bottom: 12px; }
   pre { background: var(--surface-2); border-radius: 10px; padding: 14px; overflow: auto; max-height: 560px; margin: 0; line-height: 1.5; }
+  /* token counts in the routes table, and the LLM text they open */
+  button.tok { font: 600 13px/1.2 "JetBrains Mono", ui-monospace, monospace; color: var(--accent); background: var(--surface-2);
+               border: 1px solid var(--line); border-radius: 8px; padding: 4px 9px; cursor: pointer; white-space: nowrap; }
+  button.tok:hover, button.tok[aria-expanded="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.tok::after { content: " ▾"; font-size: 10px; opacity: .7; } button.tok[aria-expanded="true"]::after { content: " ▴"; }
+  tr.llm-row > td { background: var(--bg); padding: 12px; }
+  .llm-box { position: sticky; left: 12px; }
+  .llm-box pre { white-space: pre-wrap; word-break: break-word; font: 12.5px/1.5 "JetBrains Mono", ui-monospace, monospace; }
+  .llm-box .llm-meta { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+  .llm-box details { margin-top: 10px; } .llm-box details > summary { font-size: 13px; }
+  .fine-note { font-size: 13px; margin: 10px 0 0; }
+  /* routes table: change since the previous scan, single-route runs, cancel buttons */
+  .chg { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 99px; margin-top: 4px; font-family: Inter, sans-serif; }
+  .chg-same { background: var(--surface-2); color: var(--muted); } .chg-changed { background: var(--amber-bg); color: var(--amber); }
+  .chg-new { background: #eef2ff; color: #4f46e5; }
+  .compare-note { font-size: 14px; margin: 0 0 12px; } .compare-note .chg { margin: 0 2px; }
+  table.routes td { vertical-align: middle; }
+  form.inline { display: inline; margin: 0; }
+  .run-btn, .cancel-btn { font: 600 12.5px/1 Inter, sans-serif; border-radius: 8px; padding: 6px 11px; cursor: pointer; white-space: nowrap;
+                          border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
+  .run-btn:hover:not([disabled]) { border-color: var(--accent); color: var(--accent); } .run-btn[disabled] { opacity: .5; cursor: default; }
+  .cancel-btn { color: var(--red); border-color: #fecdd3; background: var(--red-bg); } .cancel-btn:hover { background: var(--red); color: #fff; }
+  .cancel-btn.on-hero { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.4); color: #fff; }
+  .cancel-btn.on-hero:hover { background: #fff; color: var(--red); }
+  .act { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; margin-top: 6px; }
+  .act .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .act-running { color: var(--green); } .act-running .dot { background: var(--green); animation: actblink 1.2s ease-in-out infinite; }
+  .act-pending { color: var(--amber); } .act-pending .dot { background: var(--amber); }
+  @keyframes actblink { 50% { opacity: .25; } }
+  .err { color: var(--red); font-size: 12px; } a.reused { font-size: 12px; }
+  .routes .model { font-size: 12.5px; } .routes .cost { font: 600 13px/1.2 "JetBrains Mono", ui-monospace, monospace; cursor: help; }
 
   /* status pills and recent scans */
   .pill { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; background: var(--surface-2); color: var(--muted); }
@@ -1385,7 +1743,7 @@ __END__
   }
 </style>
 </head>
-<body>
+<body<%= ' class="wide"' if @wide %>>
 <%= yield %>
 <% unless @active %><%= erb :contact, layout: false %><% end %>
 <footer>
@@ -1430,10 +1788,10 @@ __END__
       vulnerabilities in it. Built for very large enterprise codebases.</p>
     <p>Maintained by an Israeli Frontier AI Security Lab, it is the #1 performer on industry benchmarks in Enterprise AI SAST vulnerability detection.</p> -->
     <form class="scan-form" method="post" action="/scans">
-      <input name="repo_url" type="url" required placeholder="https://github.com/owner/repo" autofocus aria-label="Repo URL">
+      <input name="repo_url" type="url" required placeholder="https://github.com/owner/repo" value="<%= h DEFAULT_SCAN_URL %>" autofocus aria-label="Repo URL">
       <button type="submit">Start free scan</button>
     </form>
-    <p class="fine">Free during research preview · public repos · results in minutes · scan a specific version with a link like github.com/owner/repo/tree/v1.2.3</p>
+    <p class="fine">Free during research preview · public repos · results in minutes · scan a specific version or commit with a link like github.com/owner/repo/tree/v1.2.3 or github.com/owner/repo/commit/&lt;sha&gt;</p>
     <% if @error %><p class="error"><%= h @error %></p><% end %>
     <div class="chips"><% FRAMEWORKS.each do |f| %><span class="chip"><%= f %></span><% end %></div>
   </div>
@@ -1450,7 +1808,20 @@ __END__
 <% s = @scan; name, host = repo_name(s['repo_url']); routes = s['routes'] || []; findings = s['findings']
    step = step_index(s['status']); progress = s['status'] == 'analyzing' && analysis_progress(s['log'])
    counts = verdict_counts(s); flagged = (findings || []).select { |f| %w[likely possible].include?(f['verdict']) }
-   others = (findings || []) - flagged %>
+   others = (findings || []) - flagged
+   by_route = (findings || s['partial_findings'] || []).to_h { |f| [f['route'], f] }
+   any_llm = by_route.values.any? { |f| f['llm'] }
+   usage = llm_usage(s['_id']); cmp = s['compare']; jobs = s['route_jobs'] || {}; errs = s['route_errors'] || {}
+   act = activity(s); can_run = !analysis_off_reason && trace_kept?(s['_id']) && !%w[analysis_queued analyzing].include?(s['status'])
+   todo = routes_to_analyze(s).size
+   # each route's latest LLM call (here, or in the scan a reused result came from), without the big texts
+   srcs = ([s['_id']] + by_route.values.filter_map { |f| f.dig('llm', 'scan') }).uniq
+   calls = LLM_CALLS.find(scan_id: { '$in' => srcs })
+                    .projection(prompt: 0, response: 0, system: 0, 'routes.context' => 0, 'routes.response' => 0).to_a
+   latest = {}
+   calls.sort_by { |c| c['at'] || Time.at(0) }.each { |c| (c['routes'] || []).each { |p| latest[[c['scan_id'], p['route']]] = c } }
+   own_cost = calls.select { |c| c['scan_id'] == s['_id'] }.sum { |c| call_cost(c) || 0 }
+   unpriced = calls.select { |c| c['scan_id'] == s['_id'] && call_cost(c).nil? }.map { |c| c['model'] }.uniq %>
 <header class="hero compact">
   <div class="hero-inner">
     <%= erb :brand, layout: false %>
@@ -1465,8 +1836,9 @@ __END__
       <% if s['started_at'] %><span>⏱ trace <%= took s %></span><% end %>
       <% if s['analysis_started_at'] %><span>⏱ analysis <%= analysis_took s %></span><% end %>
       <a href="/scans/<%= h s['_id'] %>.json">JSON</a>
+      <% if act %><form class="inline" method="post" action="/scans/<%= h s['_id'] %>/cancel"><button class="cancel-btn on-hero" type="submit">Cancel</button></form><% end %>
     </div>
-    <% if s['status'] != 'failed' %>
+    <% if !%w[failed canceled].include?(s['status']) %>
     <div class="steps">
       <% ["Waiting", "Clone", "Trace", "Analyze", "Done"].each_with_index do |label, i| %>
         <span class="step <%= i < step || step == 4 ? 'done' : (i == step ? 'now' : '') %>">
@@ -1480,7 +1852,8 @@ __END__
         <%= { "queued" => (@ahead.positive? ? "#{@ahead} scan(s) ahead of this one." : "Starting…"),
               "cloning" => "Cloning the repo…", "tracing" => "Tracing routes through filters and handlers…",
               "analysis_queued" => "The analysis starts when the scans ahead of it finish…",
-              "analyzing" => (progress ? "Asking the LLM: batch #{progress[0]} of #{progress[1]} done…" : "Asking the LLM about each route…") }[s['status']] %>
+              "analyzing" => (progress ? "Asking the LLM: batch #{progress[0]} of #{progress[1]} done…" : "Asking the LLM about each route…") }[s['status']] ||
+            "#{act ? act[1] : 'Working'}…" %>
         <span style="opacity:.75"><%= @live ? "Results appear below as each batch is reviewed." : "This page refreshes every 3 seconds." %></span>
       </div>
       <% if progress && !@live %><div class="bar"><span style="width:<%= (100.0 * progress[0] / [progress[1], 1].max).round %>%"></span></div><% end %>
@@ -1490,6 +1863,8 @@ __END__
 <main>
   <% if s['status'] == 'failed' %>
     <div class="card"><div class="notice bad" style="margin:0"><b>Scan failed:</b> <%= h s['error'] %></div></div>
+  <% elsif s['status'] == 'canceled' %>
+    <div class="card"><div class="notice" style="margin:0">This scan was canceled before its trace finished. Start it again from the home page.</div></div>
   <% end %>
 
   <% if routes.any? || s['status'] == 'done' %>
@@ -1501,6 +1876,11 @@ __END__
       <div class="stat green"><b><%= counts['unlikely'].to_i %></b><span>look fine</span></div>
     <% end %>
     <% (s['frameworks'] || {}).each do |fw, n| %><div class="stat"><b><%= n %></b><span><%= h fw %> routes</span></div><% end %>
+    <% if usage %>
+      <div class="stat"><b><%= num usage['input'] %></b><span>input tokens · <%= num usage['calls'] %> LLM calls</span></div>
+      <div class="stat"><b><%= num usage['output'] %></b><span>output tokens</span></div>
+      <div class="stat"><b><%= money own_cost %></b><span>LLM cost<%= unpriced.any? ? " · no price for #{h unpriced.join(', ')}" : '' %></span></div>
+    <% end %>
   </div>
   <% end %>
 
@@ -1510,7 +1890,9 @@ __END__
       <div class="text">
         <h3>Trace complete. Ready for frontier analysis 🧠</h3>
         <p>Our frontier model reads each route's traced code and scores how likely it is to let one user reach another user's data.
-           <%= s['route_count'] %> routes, about <%= llm_calls(s) %> LLM calls, usually a minute or two.</p>
+           <%= todo %> routes to review, about <%= llm_calls(todo) %> LLM calls, usually a minute or two.<%
+           kept = routes.size - todo %><% if kept.positive? && findings %> The other <%= findings.size %> already have results<%=
+           cmp && cmp['reused'].to_i.positive? ? " (#{cmp['reused']} reused from the previous scan, where their code was identical)" : '' %>.<% end %></p>
       </div>
       <button type="submit">Run the analysis ✨</button>
     </form>
@@ -1522,7 +1904,7 @@ __END__
     <div class="notice">No routes that take input were found. The tracer may not support this framework yet.</div>
   <% end %>
 
-  <% if findings %>
+  <% if findings && !@live %>
     <% if flagged.empty? %>
       <div class="notice good">🎉 No likely or possible BOLAs found in <%= findings.size %> routes.</div>
     <% else %>
@@ -1550,19 +1932,65 @@ __END__
   <% if routes.any? %>
   <h2>Trace</h2>
   <div class="card">
-    <details <%= 'open' unless findings %>><summary>All traced routes <span class="muted">· <%= routes.size %></span></summary>
-    <div class="table-wrap"><table>
-      <tr><th>Route</th><th>Handler</th><th>Input</th><th>Data access</th><th>Reached</th></tr>
-      <% routes.each do |r| %>
-      <tr>
-        <td class="mono"><%= h r['route'] %></td>
-        <td><%= h r['handler'] %><br><span class="muted"><%= h r['framework'] %></span></td>
-        <td><%= h r['input'].join(', ') %></td>
+    <details open><summary>All traced routes <span class="muted">· <%= routes.size %></span></summary>
+    <% if cmp %>
+      <p class="compare-note">Compared with <a href="/scans/<%= h cmp['scan'] %>">the previous scan</a> of this repo
+        (<%= when_s cmp['at'] %><% if present?(cmp['commit']) %>, commit <span class="mono"><%= h cmp['commit'][0, 10] %></span><% end %>):
+        <span class="chg chg-same"><%= cmp['same'] %> identical</span> <span class="chg chg-changed"><%= cmp['changed'] %> changed</span>
+        <span class="chg chg-new"><%= cmp['new'] %> new</span><% if cmp['removed'].to_i.positive? %> · <%= cmp['removed'] %> removed<% end %>.
+        <% if cmp['reused'].to_i.positive? %><%= cmp['reused'] %> identical routes kept that scan's results instead of asking the LLM again.<% end %></p>
+    <% end %>
+    <div class="table-wrap"><table class="routes">
+      <tr><th>Route</th><th>Handler</th><th>Data access</th>
+          <th title="The code the LLM reads for this route, from the trace">Context</th>
+          <th title="Tokens of this route's code in the LLM prompt (estimated)">Context tokens</th>
+          <th title="Tokens of the LLM's answer for this route (estimated)">Response tokens</th>
+          <th>Model</th>
+          <th title="This route's share of its LLM call's cost: its context, its share of the shared prompt, and its share of the answer">Cost</th>
+          <th>Result</th><th></th></tr>
+      <% routes.each_with_index do |r, i| f = by_route[r['route']]; l = f && f['llm']; job = jobs[i.to_s]
+           c = f && latest[[f.dig('llm', 'scan') || s['_id'], r['route']]]; rc = c && route_cost(c, r['route']) %>
+      <tr id="route-<%= i %>" data-i="<%= i %>">
+        <td class="mono"><%= h r['route'] %>
+          <% if cmp && r['change'] %><br><span class="chg chg-<%= h r['change'] %>"><%= { 'same' => 'identical', 'changed' => 'changed', 'new' => 'new' }[r['change']] %></span><% end %></td>
+        <td><%= h r['handler'] %><br><span class="muted"><%= h r['framework'] %><% if r['input'].any? %> · <%= h r['input'].join(', ') %><% end %>
+          · <%= r['methods'] %> methods, <%= r['files'] %> files</span></td>
         <td class="mono"><% r['model_calls'].each do |m| %><%= h m %><br><% end %></td>
-        <td class="muted"><%= r['methods'] %> methods, <%= r['files'] %> files</td>
+        <td><% if r['chars'].to_i.positive? %><button type="button" class="tok" data-part="code" aria-expanded="false"><%= num r['chars'] %> chars</button>
+            <% else %><span class="muted">—</span><% end %></td>
+        <td><% if l %><button type="button" class="tok" data-part="context" aria-expanded="false"><%= num l['context_tokens'] %></button><% else %><span class="muted">—</span><% end %></td>
+        <td><% if l %><button type="button" class="tok" data-part="response" aria-expanded="false"><%= num l['response_tokens'] %></button><% else %><span class="muted">—</span><% end %></td>
+        <td class="nowrap"><% if c %><span class="mono model" title="<%= h c['model'] %>"><%= h Pricing.split(c['model'])[1] %></span><% else %><span class="muted">—</span><% end %></td>
+        <td class="nowrap"><% if rc %>
+            <span class="cost<%= ' muted' if f['reused_from'] %>" title="<%= h [
+              "#{num rc['context_tokens']} context + #{num rc['shared_tokens']} shared prompt tokens#{rc['cached_tokens'].positive? ? " (#{num rc['cached_tokens']} cached)" : ''} at #{per_million rc['price']['input']}/M = #{money rc['input_cost']}",
+              "#{num rc['output_tokens']} response tokens#{rc['reasoning_tokens'] ? " (#{num rc['reasoning_tokens']} hidden reasoning)" : ''} at #{per_million rc['price']['output']}/M = #{money rc['output_cost']}",
+              (rc['call_routes'] > 1 ? "Its share of an LLM call of #{rc['call_routes']} routes." : nil),
+              (f['reused_from'] ? 'Spent by the previous scan: this scan reused the result for free.' : nil)].compact.join("\n") %>"><%= money rc['total'] %></span>
+          <% elsif c %><span class="muted" title="No price for <%= h c['model'] %> in the price list">no price</span>
+          <% else %><span class="muted">—</span><% end %></td>
+        <td class="nowrap">
+          <% if job == 'running' %><span class="pending">Asking the LLM… <%= duration((s['route_started'] || {})[i.to_s], nil) %></span>
+            <br><span class="muted" style="font-size:12px"><%= h LLM.describe %> · often 30–60s · see the log below</span>
+          <% elsif job %><span class="pending">Waiting in the queue…</span>
+          <% elsif f %><span class="verdict <%= h f['verdict'] %>" style="margin-left:0"><%= h f['verdict'] %> · <%= h f['score'] || '-' %></span>
+            <% if f['reused_from'] %><br><a class="muted reused" href="/scans/<%= h f['reused_from'] %>" title="Identical code: this result comes from the previous scan">reused</a><% end %>
+          <% else %><span class="muted">—</span><% end %>
+          <% if errs[i.to_s] %><br><span class="err" title="<%= h errs[i.to_s] %>">failed: <%= h errs[i.to_s][0, 40] %></span><% end %>
+        </td>
+        <td><% if can_run && r['chars'] != 0 %>
+          <form class="inline" method="post" action="/scans/<%= h s['_id'] %>/routes/<%= i %>/run">
+            <button class="run-btn" type="submit" <%= 'disabled' if job %>><%= f ? 'Run again' : 'Run' %></button></form>
+        <% end %></td>
       </tr>
+      <tr class="llm-row" hidden><td colspan="10"><div class="llm-box"></div></td></tr>
       <% end %>
-    </table></div></details>
+    </table></div>
+    <p class="muted fine-note">Click a count to see the text. <b>Context</b> is the code the LLM reads for the route, kept from the trace.
+      <% if any_llm %>Token counts per route are estimates: the LLM bills each call (up to <%= ANALYZE_BATCH %> routes) as a whole, so each
+      route gets its share by length; each call's exact billed tokens show when you open one.<% end %>
+      <% if can_run %><b>Run</b> asks the LLM about that one route again.<% end %></p>
+    </details>
   </div>
   <% end %>
 
@@ -1604,6 +2032,30 @@ __END__
   })();
 </script>
 <% end %>
+<script>
+  // Routes table: a click on a token count opens the text under the row (fetched once), a second click closes it.
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest("button.tok");
+    if (!b) return;
+    var tr = b.closest("tr"), row = tr.nextElementSibling, box = row.querySelector(".llm-box"), part = b.getAttribute("data-part");
+    var open = !row.hidden && row.getAttribute("data-part") === part;
+    tr.querySelectorAll("button.tok").forEach(function (x) { x.setAttribute("aria-expanded", "false"); });
+    if (open) { row.hidden = true; return; }
+    row.hidden = false; row.setAttribute("data-part", part); b.setAttribute("aria-expanded", "true");
+    // the table may scroll sideways: keep the text as wide as the visible part, not the whole table
+    box.style.width = (tr.closest(".table-wrap").clientWidth - 24) + "px";
+    var cache = row.cache || (row.cache = {});
+    if (cache[part]) { box.innerHTML = cache[part]; return; }
+    box.innerHTML = '<span class="muted">Loading…</span>';
+    var url = "/scans/<%= h s['_id'] %>/route/" + tr.getAttribute("data-i") + "?part=" + part;
+    fetch(url, { credentials: "same-origin" }).then(function (r) { return r.text().then(function (t) { return [r.ok, t]; }); })
+      .then(function (res) {
+        var html = res[0] ? res[1] : '<span class="muted">' + res[1].replace(/&/g, "&amp;").replace(/</g, "&lt;") + "</span>";
+        if (res[0]) cache[part] = html;
+        if (row.getAttribute("data-part") === part) box.innerHTML = html;
+      }).catch(function () { box.innerHTML = '<span class="muted">Could not load it. Try again.</span>'; });
+  });
+</script>
 <script>
   // Keep the log scrolled to the end while the scan runs; throw confetti when a scan you watched finishes.
   (function () {
@@ -1691,7 +2143,11 @@ __END__
   <tr>
     <td><a href="<%= link %>"><b><%= h name %></b></a><br><span class="muted"><%= h host %></span></td>
     <% if admin? %><td class="by-user"><%= h user_name(s['requested_by']) %><% if s['requested_by'] %><br><span class="muted"><%= h s['requested_by']['email'] %></span><% end %></td><% end %>
-    <td><%= status_pill s['status'] %></td>
+    <td><%= status_pill s['status'] %>
+      <% if (act = activity(s)) %>
+        <div class="act act-<%= act[0] %>"><span class="dot"></span><%= act[0] == :running ? 'Active' : 'Pending' %><% if act[1] != STATUS_LABEL[s['status']] %> · <%= h act[1] %><% end %></div>
+        <div><form class="inline" method="post" action="/scans/<%= h s['_id'] %>/cancel"><button class="cancel-btn" type="submit" style="margin-top:6px">Cancel</button></form></div>
+      <% end %></td>
     <td class="summary">
       <% if v %>
         <span class="verdict likely"><%= v['likely'].to_i %> likely</span>
@@ -1706,6 +2162,8 @@ __END__
         <%= n || 'Some' %> routes traced <span class="muted">· no LLM analysis</span>
       <% elsif s['status'] == 'failed' %>
         <span class="muted"><%= h s['error'].to_s[0, 90] %></span>
+      <% elsif s['status'] == 'canceled' %>
+        <span class="muted">Canceled before the trace finished</span>
       <% else %>
         <span class="muted"><%= n ? "#{n} routes traced, analyzing…" : 'In progress…' %></span>
       <% end %>
@@ -2309,8 +2767,50 @@ __END__
   </div>
 </div>
 
+@@ llm_part
+<% calls = call['of'].to_i; k = call['routes'].size; ctx_sum = call['routes'].sum { |x| x['context_tokens'].to_i }
+   rc = route_cost(call, r['route']); cc = call_cost(call) %>
+<p class="llm-meta">Model <b class="mono"><%= h call['model'] %></b><% if rc %> · this route's cost <b><%= money rc['total'] %></b>
+  (<%= money rc['input_cost'] %> input + <%= money rc['output_cost'] %> output)<% if k > 1 %> · the whole call <%= money cc %><% end %>
+  · prices per million tokens: <%= per_million rc['price']['input'] %> input, <%= per_million rc['price']['output'] %> output<%=
+  rc['price']['cache_read'] ? ", #{per_million rc['price']['cache_read']} cached input" : '' %><% else %> · no price for this model in the price list<% end %></p>
+<div class="llm-part">
+<% if reused %><p class="llm-meta">This route's code is identical to <a href="/scans/<%= h reused %>">the previous scan</a>, so its result was reused
+  and it wasn't sent to the LLM again. The call below is the one that produced it (<%= when_s call['at'] %>).</p><% end %>
+<% if part == 'context' %>
+  <p class="llm-meta"><b>≈<%= num r['context_tokens'] %> tokens</b> of context for this route, as sent in LLM call <%= call['index'] %> of <%= calls %>
+    (<%= k %> <%= k == 1 ? 'route' : 'routes' %>). The call was billed <b><%= num call['input_tokens'] %></b> input tokens<% if call['cache_read_tokens'].to_i.positive? %>
+    (<%= num call['cache_read_tokens'] %> from cache)<% end %>; ≈<%= num [call['input_tokens'].to_i - ctx_sum, 0].max %> of them are the system
+    prompt and instructions, shared by its <%= k == 1 ? 'one route' : "#{k} routes" %>.</p>
+  <pre><%= h r['context'] %></pre>
+  <details><summary>Full prompt of this call <span class="muted">· system prompt, instructions and all <%= k %> routes · <%= num call['input_tokens'] %> tokens</span></summary>
+    <pre>SYSTEM:
+<%= h call['system'] %>
+
+USER:
+<%= h call['prompt'] %></pre></details>
+<% else %>
+  <p class="llm-meta"><b>≈<%= num r['response_tokens'] %> tokens</b> of answer for this route, from LLM call <%= call['index'] %> of <%= calls %>.
+    The call's whole answer was billed <b><%= num call['output_tokens'] %></b> output tokens<% if call['reasoning_tokens'] %>, <%= num call['reasoning_tokens'] %> of them hidden reasoning<% else %>, including any hidden thinking<% end %>.
+    <% if call['seconds'] %>It took <%= call['seconds'] %>s<%= call['attempts'].to_i > 1 ? " and #{call['attempts']} attempts" : '' %>.<% end %></p>
+  <% if present?(call['error']) %><div class="notice bad" style="margin:0 0 8px">This call failed: <%= h call['error'] %></div><% end %>
+  <pre><%= present?(r['response']) ? h(r['response']) : '(no answer for this route)' %></pre>
+  <details><summary>Full answer of this call <span class="muted">· all <%= k %> routes · <%= num call['output_tokens'] %> tokens</span></summary>
+    <pre><%= h call['response'] %></pre></details>
+<% end %>
+</div>
+
+@@ code_part
+<div class="llm-part">
+  <p class="llm-meta"><b><%= num r['chars'] %> characters</b> of context for this route: the code the LLM reads for it, as the trace
+    found it (filters first, then the handler and what it calls).<% if r['change'] %> <%= { 'same' => 'Identical to', 'changed' => 'Changed since', 'new' => 'Not in' }[r['change']] %> the previous scan of this repo.<% end %></p>
+  <pre><%= h d['context'] %></pre>
+</div>
+
 @@ live
-<% s = @scan; rows = s['partial_findings'] || []; total = [s['route_count'].to_i, rows.size].max; done = rows.size
+<% s = @scan; fresh = s['partial_findings'] || []
+   rows = (s['findings'] || []).reject { |f| fresh.any? { |x| x['route'] == f['route'] } } + fresh # earlier results, then this run's
+   total = [s['route_count'].to_i, rows.size].max; done = rows.size
    by_route = rows.to_h { |f| [f['route'], f] }
    flagged = rows.select { |f| %w[likely possible].include?(f['verdict']) }.sort_by { |f| -f['score'].to_i } %>
 <div class="card live-head">

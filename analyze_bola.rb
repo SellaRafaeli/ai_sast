@@ -11,6 +11,7 @@
 #   3. ASK      one LLM call per batch: a JSON verdict + 0..100 score per route
 #   4. RANK     sort all routes by score
 #   5. OUTPUT   bola_report.json (all fields) + bola_report.md (ranked table + details)
+#               + --calls FILE: each LLM call's full prompt, answer and billed tokens (JSON lines)
 #               + Mongo `findings` collection when the mongo gem is available
 #
 # LLM key: ANTHROPIC_API_KEY or OPEN_AI_API_KEY in the environment or .env (see llm.rb).
@@ -51,8 +52,10 @@ SYSTEM_PROMPT = <<~TXT
     0-19    properly scoped or authorized, or no user-controlled object identifier
 TXT
 
+def route_block(id, text) = "===== ROUTE #{id} =====\n#{text}"
+
 def batch_prompt(items)
-  routes = items.map { |id, _t, text| "===== ROUTE #{id} =====\n#{text}" }.join("\n\n")
+  routes = items.map { |id, _t, text| route_block(id, text) }.join("\n\n")
   <<~TXT
     Review these #{items.size} routes for BOLA/IDOR.
 
@@ -72,7 +75,8 @@ def batch_prompt(items)
 end
 
 # ── 1. LOAD ──
-opts = { in: "trace.json", out: "bola_report", batch: 10, jobs: 3, max_chars: 150_000, limit: nil, dry: false, partial: nil }
+opts = { in: "trace.json", out: "bola_report", batch: 10, jobs: 3, max_chars: 150_000, limit: nil, dry: false, partial: nil,
+         calls: nil }
 OptionParser.new do |o|
   o.banner = "usage: ruby analyze_bola.rb [trace.json] [options]"
   o.on("--out NAME", "report base name (default bola_report -> .json and .md)") { |v| opts[:out] = v.sub(/\.(json|md)\z/, "") }
@@ -82,6 +86,7 @@ OptionParser.new do |o|
   o.on("--limit N", Integer, "only analyze the first N routes (cheap test run)") { |v| opts[:limit] = v }
   o.on("--dry-run", "build the batches and print the first prompt; no LLM calls") { opts[:dry] = true }
   o.on("--partial FILE", "append each batch's results to FILE as JSON lines as soon as the batch finishes") { |v| opts[:partial] = v }
+  o.on("--calls FILE", "append each LLM call (prompt, answer, tokens) to FILE as one JSON line") { |v| opts[:calls] = v }
 end.parse!
 opts[:in] = ARGV[0] if ARGV[0]
 
@@ -117,10 +122,18 @@ abort "[llm] #{LLM.describe}" unless LLM.available?
 log(:llm, LLM.describe)
 
 # ── 3. ASK ── one call per batch, --jobs at a time
-def analyze(items)
-  answer = nil
+# Returns [per-route results, the call record]. The provider reports tokens per call, not per route, so each
+# route's share is estimated: its characters times the call's billed input tokens per character.
+def analyze(items, index, total)
+  prompt = batch_prompt(items)
+  max_tokens = 400 * items.size + 1000
+  log_request(items, prompt, index, total, max_tokens)
+  answer, text, usage, attempts = nil, "", Hash.new(0), 0
   2.times do |attempt|
-    text = LLM.ask(batch_prompt(items), system: SYSTEM_PROMPT, max_tokens: 400 * items.size + 1000)
+    attempts += 1
+    res = LLM.chat(prompt, system: SYSTEM_PROMPT, max_tokens: max_tokens)
+    %i[input_tokens output_tokens cache_read_tokens cache_write_tokens reasoning_tokens].each { |k| usage[k] += res[k].to_i }
+    text = res[:text]
     answer = Array(LLM.extract_json(text))
     break
   rescue LLM::Error => e
@@ -128,32 +141,93 @@ def analyze(items)
     log(:ask, "retrying batch (#{e.message[0, 80]})")
   end
   by_id = answer.select { |r| r.is_a?(Hash) }.to_h { |r| [r["id"].to_s, r] }
-  items.map do |id, t, _text|
+  call_routes = call_routes(items, prompt, usage, by_id)
+  call = call_record(index, total, prompt, text, usage, attempts, call_routes)
+  results = items.each_with_index.map do |(id, t, _text), j|
     r = by_id[id] || { "verdict" => "error", "score" => nil, "reason" => "missing from the LLM answer" }
     { "route" => t["route"], "framework" => t["framework"], "handler" => t["handler"], "input" => t["input"],
-      "repo" => t["repo"] }.merge(r.reject { |k, _| k == "id" })
+      "repo" => t["repo"], "llm" => llm_ref(call, call_routes[j]) }.merge(r.reject { |k, _| k == "id" })
   end
+  [results, call]
 rescue LLM::Error => e
   log(:ask, "batch failed: #{e.message[0, 200]}")
-  items.map { |_id, t, _| { "route" => t["route"], "handler" => t["handler"], "verdict" => "error", "score" => nil, "reason" => e.message[0, 200] } }
+  call_routes = call_routes(items, prompt, usage, {})
+  call = call_record(index, total, prompt, text, usage, attempts, call_routes).merge("error" => e.message[0, 500])
+  [items.each_with_index.map do |(_id, t, _), j|
+    { "route" => t["route"], "handler" => t["handler"], "verdict" => "error", "score" => nil, "reason" => e.message[0, 200],
+      "llm" => llm_ref(call, call_routes[j]) }
+  end, call]
+end
+
+# Each route's part of the call: the block of the prompt that holds its code, and its object in the answer.
+# Without billed tokens (the call failed) a rough 4 characters per token is used.
+def call_routes(items, prompt, usage, by_id)
+  per_char = usage[:input_tokens].positive? ? usage[:input_tokens].to_f / (SYSTEM_PROMPT.size + prompt.size) : 0.25
+  items.map do |id, t, rtext|
+    context = route_block(id, rtext)
+    response = by_id[id] ? JSON.pretty_generate(by_id[id]) : ""
+    { "id" => id, "route" => t["route"], "context" => context, "response" => response,
+      "context_tokens" => (context.size * per_char).round, "response_tokens" => (response.size * per_char).round }
+  end
+end
+
+# What is about to go to the LLM, in one log write (calls run in parallel): the routes, the size of the request,
+# and the start of the prompt itself. Token counts here are a rough guess (about 4 characters per token); the
+# provider's exact counts are logged when the answer comes back.
+def log_request(items, prompt, index, total, max_tokens)
+  chars = SYSTEM_PROMPT.size + prompt.size
+  lines = ["[send] call #{index + 1}/#{total} to #{LLM.describe}: #{items.size} route#{items.size == 1 ? '' : 's'}, " \
+           "#{chars} chars (system prompt #{SYSTEM_PROMPT.size} + prompt #{prompt.size}), about #{chars / 4} prompt tokens, " \
+           "answer capped at #{max_tokens} tokens"]
+  items.each { |id, t, text| lines << "[send]   #{id} #{t['route']} (#{text.size} chars of code)" }
+  preview = prompt[0, PREVIEW_CHARS]
+  lines << "[send]   prompt starts:"
+  lines.concat(preview.lines.map { |l| "[send]   | #{l.chomp}" })
+  lines << "[send]   | ... (#{prompt.size - preview.size} more chars; the scan page shows the whole prompt)" if prompt.size > preview.size
+  puts lines.join("\n")
+end
+PREVIEW_CHARS = 1500
+
+def call_record(index, total, prompt, text, usage, attempts, call_routes)
+  { "index" => index + 1, "of" => total, "model" => LLM.describe, "attempts" => attempts,
+    "input_tokens" => usage[:input_tokens], "output_tokens" => usage[:output_tokens],
+    "cache_read_tokens" => usage[:cache_read_tokens], "cache_write_tokens" => usage[:cache_write_tokens],
+    "reasoning_tokens" => usage[:reasoning_tokens].positive? ? usage[:reasoning_tokens] : nil,
+    "system" => SYSTEM_PROMPT, "prompt" => prompt, "response" => text, "routes" => call_routes }
+end
+
+# What each route's result carries about its LLM call: counts only (the texts are in the --calls file).
+def llm_ref(call, cr)
+  { "call" => call["index"], "calls" => call["of"], "id" => cr["id"], "call_routes" => call["routes"].size,
+    "context_tokens" => cr["context_tokens"], "response_tokens" => cr["response_tokens"],
+    "call_input_tokens" => call["input_tokens"], "call_output_tokens" => call["output_tokens"] }
 end
 
 queue = Queue.new
 batches.each_with_index { |b, i| queue << [b, i] }
 results = Array.new(batches.size)
+usage_total = Hash.new(0)
 mutex = Mutex.new
 workers = Array.new([opts[:jobs], batches.size].min) do
   Thread.new do
     while (job = (queue.pop(true) rescue nil))
       b, i = job
       t0 = Time.now
-      res = analyze(b)
+      res, call = analyze(b, i, batches.size)
+      call["seconds"] = (Time.now - t0).round(1)
       results[i] = res
       flagged = res.count { |r| %w[likely possible].include?(r["verdict"]) }
       mutex.synchronize do
+        %w[input_tokens output_tokens].each { |k| usage_total[k] += call[k].to_i }
+        usage_total["calls"] += 1
+        # the call first, so a reader that sees a route's verdict can already find its texts
+        File.open(opts[:calls], "a") { |f| f.puts(JSON.generate(call)) } if opts[:calls]
         # one JSON line per route, written whole under the lock, so a reader never sees half a batch
         File.open(opts[:partial], "a") { |f| res.each { |r| f.puts(JSON.generate(r)) } } if opts[:partial]
-        log(:ask, "batch #{i + 1}/#{batches.size}: #{b.size} routes, #{flagged} flagged (#{(Time.now - t0).round}s)")
+        log(:ask, "batch #{i + 1}/#{batches.size}: #{b.size} routes, #{flagged} flagged (#{(Time.now - t0).round}s): " \
+                  "#{call['input_tokens']} prompt tokens sent, #{call['output_tokens']} response tokens back" \
+                  "#{call['reasoning_tokens'] ? " (#{call['reasoning_tokens']} of them hidden reasoning)" : ''}" \
+                  "#{call['error'] ? " - FAILED: #{call['error'][0, 150]}" : ''}")
         res.sort_by { |r| -r["score"].to_i }.each do |r|
           log(:verdict, format("%3s  %-8s  %s", r["score"] || "-", r["verdict"], r["route"]))
         end
@@ -169,9 +243,11 @@ ranked = results.flatten.compact.sort_by { |r| [-(r["score"] || -1).to_i, VERDIC
 ranked.each_with_index { |r, i| r["rank"] = i + 1 }
 counts = ranked.map { |r| r["verdict"] }.tally
 log(:rank, counts.map { |k, v| "#{k}: #{v}" }.join(", "))
+log(:tokens, "#{usage_total['input_tokens']} prompt tokens sent, #{usage_total['output_tokens']} response tokens back, in #{usage_total['calls']} LLM calls")
 
 # ── 5. OUTPUT ──
-meta = { "generated_at" => Time.now.utc.iso8601, "model" => LLM.describe, "trace_file" => opts[:in], "counts" => counts }
+meta = { "generated_at" => Time.now.utc.iso8601, "model" => LLM.describe, "trace_file" => opts[:in], "counts" => counts,
+         "usage" => usage_total }
 File.write("#{opts[:out]}.json", JSON.pretty_generate(meta.merge("routes" => ranked)))
 
 cell = ->(s) { s.to_s.gsub("|", "\\|").gsub(/\s+/, " ").strip }

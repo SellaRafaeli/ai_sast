@@ -84,7 +84,8 @@ class MongoStore
   end
 
   def defs_named(name)
-    @cache[name] ||= @db[:defs].find(repo: @repo, name: name).map { |d| clean(d) }
+    # sorted by id, so same-named candidates (at most MAX_FANOUT followed) come in the same order every run
+    @cache[name] ||= @db[:defs].find(repo: @repo, name: name).sort(id: 1).map { |d| clean(d) }
   end
 
   def def_by_id(id) = (d = @db[:defs].find(repo: @repo, id: id).first) && clean(d)
@@ -95,7 +96,7 @@ end
 class MemoryStore
   def initialize = (@data = Hash.new { |h, k| h[k] = [] })
   def insert(coll, docs) = @data[coll].concat(docs)
-  def defs_named(name) = (@by_name ||= @data[:defs].group_by { |d| d["name"] })[name] || []
+  def defs_named(name) = (@by_name ||= @data[:defs].sort_by { |d| d["id"].to_s }.group_by { |d| d["name"] })[name] || []
   def def_by_id(id) = (@by_id ||= @data[:defs].to_h { |d| [d["id"], d] })[id]
 end
 
@@ -374,7 +375,8 @@ PY_INDEXER = <<~'PY'
           nm, rv = call_of(d)
           if nm and nm not in VERBS and nm != 'before_request':
               out.append({'name': nm, 'recv': rv})
-      return [dict(t) for t in {tuple(sorted(c.items(), key=str)) for c in out}]
+      # dedupe in source order (a set's order changes every run, and so would the trace)
+      return [dict(t) for t in dict.fromkeys(tuple(sorted(c.items(), key=str)) for c in out)]
 
   def params_of(fn):  # handler args = path/query/body input (minus Depends() and framework args)
       a = fn.args
@@ -1064,6 +1066,7 @@ if $PROGRAM_NAME == __FILE__
   # 1. INDEX
   files = Dir.glob("**/*.{rb,py,js,jsx,mjs,cjs,ts,tsx}", base: repo)
              .reject { |f| f.split("/").any? { |p| SKIP_DIRS.include?(p) } || f.end_with?(".d.ts", ".min.js") }
+             .sort # glob order depends on the filesystem; sorted, the same code always traces the same way
   rb_files = files.select { |f| f.end_with?(".rb") }
   py_files = files.select { |f| f.end_with?(".py") }
   js_files = files.grep(JS_EXT)
