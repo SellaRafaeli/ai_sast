@@ -215,7 +215,12 @@ end
 
 def update(id, fields) = SCANS.update_one({ _id: id }, { "$set" => fields })
 
-def append_log(id, text)
+# "line\n" -> "line  [07:12:03 UTC]\n": the time at the end of every line that has text (blank lines stay blank).
+def stamp_lines(text, at = Time.now.utc) = text.gsub(/(?<=[^\n])\n/, "  [#{at.strftime('%H:%M:%S UTC')}]\n")
+
+# Add to the scan's log. Each line gets its time at the end, unless the text was stamped already (stamp: false).
+def append_log(id, text, stamp: true)
+  text = stamp_lines(text) if stamp
   scan = SCANS.find(_id: id).projection(log: 1).first
   log = (scan["log"].to_s + text)
   log = "... (earlier lines cut)\n" + log[-MAX_LOG_CHARS..] if log.size > MAX_LOG_CHARS
@@ -223,11 +228,14 @@ def append_log(id, text)
 end
 
 # Run a command, copy its output into the scan's log every couple of seconds, kill it on timeout.
+# Each output line is stamped with the time it was read, so the log shows when it happened, not when it was copied.
 # Returns [success?, output].
 def run(id, env, cmd, chdir:, timeout:)
   append_log(id, "$ #{cmd.map { |a| a.include?(' ') ? a.inspect : a }.join(' ')}\n")
   out = +""
-  pending = +""
+  pending = +"" # stamped lines waiting to be copied to the log
+  partial = +"" # the start of a line whose end hasn't been read yet
+  finish_line = -> { pending << stamp_lines(partial + "\n") unless partial.empty?; partial = +"" }
   last_flush = Time.now
   status = nil
   canceled = false
@@ -237,13 +245,15 @@ def run(id, env, cmd, chdir:, timeout:)
     loop do
       if cancel_requested?(id)
         Process.kill("KILL", -wait.pid) rescue nil
-        pending << "\n[canceled] stopped\n"
+        finish_line.()
+        pending << stamp_lines("\n[canceled] stopped\n")
         canceled = true
         break
       end
       if Time.now > deadline
         Process.kill("KILL", -wait.pid) rescue nil
-        pending << "\n[timeout] stopped after #{timeout}s\n"
+        finish_line.()
+        pending << stamp_lines("\n[timeout] stopped after #{timeout}s\n")
         break
       end
       ready = IO.select([io], nil, nil, 1)
@@ -253,18 +263,23 @@ def run(id, env, cmd, chdir:, timeout:)
         if chunk.is_a?(String)
           chunk = chunk.force_encoding(Encoding::UTF_8).scrub
           out << chunk
-          pending << chunk
+          partial << chunk
+          if (nl = partial.rindex("\n")) # stamp the complete lines; keep an unfinished one for the next read
+            pending << stamp_lines(partial[0..nl])
+            partial = partial[(nl + 1)..]
+          end
         end
       end
       if pending.size.positive? && Time.now - last_flush > 2
-        append_log(id, pending)
+        append_log(id, pending, stamp: false)
         pending = +""
         last_flush = Time.now
       end
     end
     status = wait.value
   end
-  append_log(id, pending) unless pending.empty?
+  finish_line.()
+  append_log(id, pending, stamp: false) unless pending.empty?
   raise Canceled, "canceled" if canceled
   [status&.success? || false, out]
 end
@@ -396,7 +411,8 @@ def route_summary(t)
     "route" => t["route"], "handler" => t["handler"], "framework" => t["framework"],
     "input" => t["input"] || [], "model_calls" => (t["model_calls"] || []).uniq.first(20),
     "external" => (t["external"] || []).uniq.first(10),
-    "methods" => (t["methods"] || []).size, "files" => (t["files"] || []).size
+    "methods" => (t["methods"] || []).size, "files" => (t["files"] || []).size,
+    "trace_seconds" => t["trace_seconds"] # how long the tracer spent on this route (nil for scans before it was timed)
   }
 end
 
@@ -1358,6 +1374,20 @@ get "/scans/:id/live" do
   erb :live, layout: false
 end
 
+# What the scan page watches while something runs: it reloads itself when this changes (a route finished, a step moved on).
+def scan_state(s)
+  { "status" => s["status"], "route_jobs" => s["route_jobs"] || {}, "findings" => (s["findings"] || []).size,
+    "route_errors" => (s["route_errors"] || {}).keys.sort }.to_json
+end
+
+get "/scans/:id/state" do
+  s = SCANS.find(visible_scans.merge(_id: params[:id].to_s))
+           .projection(status: 1, route_jobs: 1, "findings.route" => 1, route_errors: 1).first or halt(404)
+  content_type :json
+  cache_control :no_store
+  scan_state(s)
+end
+
 # What a click in the routes table opens, for route number `i`:
 #   part=code      its traced context, the code the LLM reads (kept from the trace on)
 #   part=context   its part of the latest LLM call's prompt, with the call's billed tokens and full prompt
@@ -1397,7 +1427,6 @@ __END__
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<% if @active && !@live %><meta http-equiv="refresh" content="3"><% end %>
 <title><%= @title ? "#{h @title} · " : '' %>Variablee Code · AI vulnerability detection for large codebases</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%236d28d9'/><path d='M9 10l7 13 7-13' stroke='white' stroke-width='3.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1691,6 +1720,11 @@ __END__
   .chg-new { background: #eef2ff; color: #4f46e5; }
   .compare-note { font-size: 14px; margin: 0 0 12px; } .compare-note .chg { margin: 0 2px; }
   table.routes td { vertical-align: middle; }
+  table.routes th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  table.routes th.sortable:hover, table.routes th[aria-sort] { color: var(--fg); }
+  table.routes th.sortable::after { content: " ↕"; opacity: .35; }
+  table.routes th[aria-sort="ascending"]::after { content: " ▲"; opacity: .8; }
+  table.routes th[aria-sort="descending"]::after { content: " ▼"; opacity: .8; }
   form.inline { display: inline; margin: 0; }
   .run-btn, .cancel-btn { font: 600 12.5px/1 Inter, sans-serif; border-radius: 8px; padding: 6px 11px; cursor: pointer; white-space: nowrap;
                           border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
@@ -1869,7 +1903,8 @@ __END__
               "analysis_queued" => "The analysis starts when the scans ahead of it finish…",
               "analyzing" => (progress ? "Asking the LLM: batch #{progress[0]} of #{progress[1]} done…" : "Asking the LLM about each route…") }[s['status']] ||
             "#{act ? act[1] : 'Working'}…" %>
-        <span style="opacity:.75"><%= @live ? "Results appear below as each batch is reviewed." : "This page refreshes every 3 seconds." %></span>
+        <span style="opacity:.75"><%= @live ? "Results appear below as each batch is reviewed." :
+                                      ACTIVE.include?(s['status']) ? "This page refreshes every 3 seconds." : "Results show here as soon as it's done." %></span>
       </div>
       <% if progress && !@live %><div class="bar"><span style="width:<%= (100.0 * progress[0] / [progress[1], 1].max).round %>%"></span></div><% end %>
     <% end %>
@@ -1957,12 +1992,13 @@ __END__
     <% end %>
     <div class="table-wrap"><table class="routes">
       <tr><th>Route</th><th>Handler</th><th>Data access</th>
+          <th title="Seconds the tracer spent on this route: its call tree and code (indexing the repo, shared by all routes, isn't counted)">Trace time</th>
           <th title="The code the LLM reads for this route, from the trace">Context</th>
           <th title="Tokens of this route's code in the LLM prompt (estimated)">Context tokens</th>
           <th title="Tokens of the LLM's answer for this route (estimated)">Response tokens</th>
           <th>Model</th>
           <th title="This route's share of its LLM call's cost: its context, its share of the shared prompt, and its share of the answer">Cost</th>
-          <th>Result</th><th></th></tr>
+          <th title="Sorted by score">Result</th><th data-nosort></th></tr>
       <% routes.each_with_index do |r, i| f = by_route[r['route']]; l = f && f['llm']; job = jobs[i.to_s]
            c = f && latest[[f.dig('llm', 'scan') || s['_id'], r['route']]]; rc = c && route_cost(c, r['route']) %>
       <tr id="route-<%= i %>" data-i="<%= i %>">
@@ -1971,12 +2007,13 @@ __END__
         <td><%= h r['handler'] %><br><span class="muted"><%= h r['framework'] %><% if r['input'].any? %> · <%= h r['input'].join(', ') %><% end %>
           · <%= r['methods'] %> methods, <%= r['files'] %> files</span></td>
         <td class="mono"><% r['model_calls'].each do |m| %><%= h m %><br><% end %></td>
-        <td><% if r['chars'].to_i.positive? %><button type="button" class="tok" data-part="code" aria-expanded="false"><%= num r['chars'] %> chars</button>
+        <td class="mono nowrap" data-v="<%= r['trace_seconds'] %>"><%= r['trace_seconds'] ? format('%.2fs', r['trace_seconds']) : '<span class="muted">—</span>' %></td>
+        <td data-v="<%= r['chars'] if r['chars'].to_i.positive? %>"><% if r['chars'].to_i.positive? %><button type="button" class="tok" data-part="code" aria-expanded="false"><%= num r['chars'] %> chars</button>
             <% else %><span class="muted">—</span><% end %></td>
-        <td><% if l %><button type="button" class="tok" data-part="context" aria-expanded="false"><%= num l['context_tokens'] %></button><% else %><span class="muted">—</span><% end %></td>
-        <td><% if l %><button type="button" class="tok" data-part="response" aria-expanded="false"><%= num l['response_tokens'] %></button><% else %><span class="muted">—</span><% end %></td>
+        <td data-v="<%= l && l['context_tokens'] %>"><% if l %><button type="button" class="tok" data-part="context" aria-expanded="false"><%= num l['context_tokens'] %></button><% else %><span class="muted">—</span><% end %></td>
+        <td data-v="<%= l && l['response_tokens'] %>"><% if l %><button type="button" class="tok" data-part="response" aria-expanded="false"><%= num l['response_tokens'] %></button><% else %><span class="muted">—</span><% end %></td>
         <td class="nowrap"><% if c %><span class="mono model" title="<%= h c['model'] %>"><%= h Pricing.split(c['model'])[1] %></span><% else %><span class="muted">—</span><% end %></td>
-        <td class="nowrap"><% if rc %>
+        <td class="nowrap" data-v="<%= rc && rc['total'].round(8) %>"><% if rc %>
             <span class="cost<%= ' muted' if f['reused_from'] %>" title="<%= h [
               "#{num rc['context_tokens']} context + #{num rc['shared_tokens']} shared prompt tokens#{rc['cached_tokens'].positive? ? " (#{num rc['cached_tokens']} cached)" : ''} at #{per_million rc['price']['input']}/M = #{money rc['input_cost']}",
               "#{num rc['output_tokens']} response tokens#{rc['reasoning_tokens'] ? " (#{num rc['reasoning_tokens']} hidden reasoning)" : ''} at #{per_million rc['price']['output']}/M = #{money rc['output_cost']}",
@@ -1984,8 +2021,9 @@ __END__
               (f['reused_from'] ? 'Spent by the previous scan: this scan reused the result for free.' : nil)].compact.join("\n") %>"><%= money rc['total'] %></span>
           <% elsif c %><span class="muted" title="No price for <%= h c['model'] %> in the price list">no price</span>
           <% else %><span class="muted">—</span><% end %></td>
-        <td class="nowrap">
-          <% if job == 'running' %><span class="pending">Asking the LLM… <%= duration((s['route_started'] || {})[i.to_s], nil) %></span>
+        <td class="nowrap" data-v="<%= f && !job ? f['score'] : '' %>">
+          <% if job == 'running' %><% started = (s['route_started'] || {})[i.to_s] %><span class="pending">Asking the LLM…
+            <span <% if started %>data-since="<%= started.utc.iso8601 %>"<% end %>><%= duration(started, nil) %></span></span>
             <br><span class="muted" style="font-size:12px"><%= h LLM.describe %> · often 30–60s · see the log below</span>
           <% elsif job %><span class="pending">Waiting in the queue…</span>
           <% elsif f %><span class="verdict <%= h f['verdict'] %>" style="margin-left:0"><%= h f['verdict'] %> · <%= h f['score'] || '-' %></span>
@@ -1998,7 +2036,7 @@ __END__
             <button class="run-btn" type="submit" <%= 'disabled' if job %>><%= f ? 'Run again' : 'Run' %></button></form>
         <% end %></td>
       </tr>
-      <tr class="llm-row" hidden><td colspan="10"><div class="llm-box"></div></td></tr>
+      <tr class="llm-row" hidden><td colspan="11"><div class="llm-box"></div></td></tr>
       <% end %>
     </table></div>
     <p class="muted fine-note">Click a count to see the text. <b>Context</b> is the code the LLM reads for the route, kept from the trace.
@@ -2047,7 +2085,75 @@ __END__
   })();
 </script>
 <% end %>
+<% if @active && !@live %>
 <script>
+  // While something runs, keep the page current. (A <meta refresh> can't: after "Run" the URL ends in #route-N, and
+  // a refresh to the same URL with a #fragment only jumps to the anchor, it doesn't reload.)
+  //  - a trace or analysis step waiting or running: reload every 3 seconds, as its log and progress change;
+  //  - only single routes running: check the scan's state every 2 seconds and reload as soon as it changes,
+  //    so the result shows the moment it's in, and open rows aren't closed by reloads in between.
+  (function () {
+    var whole = <%= ACTIVE.include?(s['status']) ? 'true' : 'false' %>, shown = <%= scan_state(s) %>;
+    var url = "/scans/<%= h s['_id'] %>/state";
+    if (whole) { setTimeout(function () { location.reload(); }, 3000); return; }
+    setInterval(function () {
+      fetch(url, { cache: "no-store", credentials: "same-origin" }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (now) { if (now && JSON.stringify(now) !== JSON.stringify(shown)) location.reload(); })
+        .catch(function () {});
+    }, 2000);
+    setInterval(function () { // elapsed time of running routes, ticking between checks
+      document.querySelectorAll("[data-since]").forEach(function (e) {
+        var s = Math.max(0, Math.round((Date.now() - Date.parse(e.getAttribute("data-since"))) / 1000));
+        e.textContent = s < 60 ? s + "s" : Math.floor(s / 60) + "m " + (s % 60) + "s";
+      });
+    }, 1000);
+  })();
+</script>
+<% end %>
+<script>
+  // Routes table: click a column header to sort by it, again to reverse. Number columns sort by their data-v value
+  // and start with the largest; text columns by their first line, A to Z. Empty cells always go last. Each route
+  // keeps its detail row under it, and the order survives the page's own reloads (sessionStorage, per scan).
+  (function () {
+    var table = document.querySelector("table.routes");
+    if (!table) return;
+    var store = "routes-sort-<%= h s['_id'] %>", heads = Array.prototype.slice.call(table.rows[0].cells);
+    var numeric = function (col) { return !!table.querySelector("tr[data-i] > td:nth-child(" + (col + 1) + ")[data-v]"); };
+    function value(tr, col) {
+      var td = tr.cells[col], v = td.getAttribute("data-v");
+      if (v !== null) return v === "" ? null : Number(v);
+      v = (td.innerText.split("\n")[0] || "").trim();
+      return v === "" || v === "—" ? null : v.toLowerCase();
+    }
+    function sortBy(col, dir) {
+      var rows = Array.prototype.slice.call(table.querySelectorAll("tr[data-i]"));
+      rows.sort(function (a, b) {
+        var x = value(a, col), y = value(b, col);
+        if (x === null || y === null) return x === y ? a.dataset.i - b.dataset.i : x === null ? 1 : -1;
+        var c = x < y ? -1 : x > y ? 1 : 0;
+        return (dir === "asc" ? c : -c) || a.dataset.i - b.dataset.i;
+      });
+      var body = rows[0].parentNode;
+      rows.forEach(function (tr) { var detail = tr.nextElementSibling; body.appendChild(tr); body.appendChild(detail); });
+      heads.forEach(function (th) { th.removeAttribute("aria-sort"); });
+      heads[col].setAttribute("aria-sort", dir === "asc" ? "ascending" : "descending");
+      table.dataset.col = col; table.dataset.dir = dir;
+      try { sessionStorage.setItem(store, col + ":" + dir); } catch (e) {}
+    }
+    heads.forEach(function (th, col) {
+      if (th.hasAttribute("data-nosort")) return;
+      th.classList.add("sortable");
+      th.tabIndex = 0;
+      var go = function () {
+        var again = table.dataset.col == col;
+        sortBy(col, again ? (table.dataset.dir === "asc" ? "desc" : "asc") : (numeric(col) ? "desc" : "asc"));
+      };
+      th.addEventListener("click", go);
+      th.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+    });
+    try { var saved = (sessionStorage.getItem(store) || "").split(":"); if (saved[1] && heads[+saved[0]]) sortBy(+saved[0], saved[1]); } catch (e) {}
+  })();
+
   // Routes table: a click on a token count opens the text under the row (fetched once), a second click closes it.
   document.addEventListener("click", function (ev) {
     var b = ev.target.closest("button.tok");

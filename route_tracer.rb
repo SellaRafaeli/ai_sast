@@ -1113,9 +1113,12 @@ if $PROGRAM_NAME == __FILE__
     log(:routes, "dropped #{ghosts.size} Rails routes whose controller action doesn't exist")
   end
   traces = routes.map do |r|
+    t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     t = { "repo" => repo }.merge(tracer.trace(r))
+    # this route's own trace (its call tree and code); the indexing before it is shared by all routes
+    t["trace_seconds"] = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0).round(3)
     log(:trace, "#{t['route'].ljust(40)} -> #{t['handler'] || '?'}: #{t['methods'].size} methods, " \
-                "#{t['files'].size} files, input: #{t['input'].empty? ? 'none' : t['input'].join('+')}")
+                "#{t['files'].size} files, input: #{t['input'].empty? ? 'none' : t['input'].join('+')} (#{t['trace_seconds']}s)")
     t
   end
 

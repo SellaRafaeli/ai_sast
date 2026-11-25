@@ -171,6 +171,7 @@ One document per scan in the `scans` collection: the repo URL and commit, status
 
 On the scan page, **All traced routes** shows, for each route:
 
+- **Trace time:** seconds the tracer spent on this route, building its call tree and code. Indexing the repo is shared by all routes and isn't counted.
 - **Context:** its size in characters, right after the trace. Click it to read the code.
 - **Context tokens** and **Response tokens:** once the route has been analyzed. Click to read what was sent and what came back, with the call's exact billed tokens and its full prompt or answer. Per-route counts are estimates, since a call covers up to `ANALYZE_BATCH` routes and is billed as a whole.
 - **Model** and **Cost:** the model that answered and the route's share of its call's cost. That share is its context, an even share of the prompt the call's routes share, and its share of the answer, hidden reasoning included. Hover over a cost for the breakdown. The scan's total LLM cost is in the stats row.
