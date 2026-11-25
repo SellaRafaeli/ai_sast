@@ -3,7 +3,7 @@
 # a BOLA/IDOR, and rank the routes from most to least likely.
 #
 #   ruby route_tracer.rb /path/to/repo --with-source      # -> trace.json
-#   ruby analyze_bola.rb [trace.json] [--batch 10] [--jobs 3] [--out bola_report]
+#   ruby analyze_bola.rb [trace.json] [--batch 10] [--jobs 20] [--out bola_report]
 #
 # Steps (each step logs what it does):
 #   1. LOAD     read trace.json (must be produced with --with-source)
@@ -75,13 +75,13 @@ def batch_prompt(items)
 end
 
 # ── 1. LOAD ──
-opts = { in: "trace.json", out: "bola_report", batch: 10, jobs: 3, max_chars: 150_000, limit: nil, dry: false, partial: nil,
+opts = { in: "trace.json", out: "bola_report", batch: 10, jobs: 20, max_chars: 150_000, limit: nil, dry: false, partial: nil,
          calls: nil }
 OptionParser.new do |o|
   o.banner = "usage: ruby analyze_bola.rb [trace.json] [options]"
   o.on("--out NAME", "report base name (default bola_report -> .json and .md)") { |v| opts[:out] = v.sub(/\.(json|md)\z/, "") }
   o.on("--batch N", Integer, "routes per LLM call (default 10)") { |v| opts[:batch] = v }
-  o.on("--jobs N", Integer, "LLM calls in parallel (default 3)") { |v| opts[:jobs] = v }
+  o.on("--jobs N", Integer, "LLM calls in parallel (default 20)") { |v| opts[:jobs] = v }
   o.on("--max-chars N", Integer, "max code characters per call (default 150000)") { |v| opts[:max_chars] = v }
   o.on("--limit N", Integer, "only analyze the first N routes (cheap test run)") { |v| opts[:limit] = v }
   o.on("--dry-run", "build the batches and print the first prompt; no LLM calls") { opts[:dry] = true }

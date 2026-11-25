@@ -522,9 +522,10 @@ ensure
   %i[defs routes traces].each { |c| DB[c].delete_many(repo: repo_dir) } if repo_dir rescue nil
 end
 
-# Smaller batches than the CLI default (10) so results reach the page sooner; more of them run in parallel.
-ANALYZE_BATCH = Integer(ENV.fetch("ANALYZE_BATCH", "5"))
-ANALYZE_JOBS  = Integer(ENV.fetch("ANALYZE_JOBS", "4"))
+# Small batches, many in parallel: a call's time is mostly the LLM writing its answer (~400 tokens per route), so
+# fewer routes per call means a faster call, and the threads just wait on HTTP. 40 routes = 20 calls, all at once.
+ANALYZE_BATCH = Integer(ENV.fetch("ANALYZE_BATCH", "2"))
+ANALYZE_JOBS  = Integer(ENV.fetch("ANALYZE_JOBS", "20"))
 
 # Copy the verdicts written so far (one JSON line per route) into the scan, if there are new ones.
 def save_partial(id, file)
